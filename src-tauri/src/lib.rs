@@ -142,10 +142,29 @@ fn hand_off_to_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<Pr
     }
     let cfg = config::load(&app)?;
     let kind = read_terminal_kind(&cfg.workspace);
-    let prompt = "请阅读当前目录下的 README.md 与 references/ 目录中的资料，理解项目背景与目标，然后协助我推进。先用一段话总结你的理解，再提出 3 个最有价值的下一步。";
-    let cmd = format!("claude \"{}\"", escape_applescript(prompt));
+    let prompt = build_handoff_prompt(&project_path);
+    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
     run_in_terminal(&kind, &project_path, Some(&cmd))?;
     project::mark_handed_off(&project_path)
+}
+
+fn build_handoff_prompt(project_path: &Path) -> String {
+    let abs = project_path.display();
+    let refs = project::list_references(project_path).unwrap_or_default();
+    if refs.is_empty() {
+        format!(
+            "项目根目录：{abs}。请阅读 README.md 了解项目背景与目标；当前 references/ 目录为空，如果信息不足请直接说明。先用一段话总结你的理解，再提出 3 个最有价值的下一步。"
+        )
+    } else {
+        let list = refs
+            .iter()
+            .map(|r| if r.is_dir { format!("{}/", r.name) } else { r.name.clone() })
+            .collect::<Vec<_>>()
+            .join("、");
+        format!(
+            "项目根目录：{abs}。请阅读 README.md 与 references/ 下的资料（{list}），理解项目背景与目标后，先用一段话总结你的理解，再提出 3 个最有价值的下一步。"
+        )
+    }
 }
 
 #[tauri::command]
