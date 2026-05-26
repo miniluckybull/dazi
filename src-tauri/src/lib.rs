@@ -1,4 +1,5 @@
 mod config;
+mod memory;
 mod project;
 mod schedule;
 
@@ -135,6 +136,100 @@ fn record_project_run(
 }
 
 #[tauri::command]
+fn read_profile() -> Result<String, String> {
+    memory::read_global("profile.md")
+}
+
+#[tauri::command]
+fn write_profile(content: String) -> Result<(), String> {
+    memory::write_global("profile.md", &content)
+}
+
+#[tauri::command]
+fn read_patterns() -> Result<String, String> {
+    memory::read_global("patterns.md")
+}
+
+#[tauri::command]
+fn write_patterns(content: String) -> Result<(), String> {
+    memory::write_global("patterns.md", &content)
+}
+
+#[tauri::command]
+fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
+    memory::read_project(&project_path, "journal.md")
+}
+
+#[tauri::command]
+fn read_project_context(project_path: PathBuf) -> Result<String, String> {
+    memory::read_project(&project_path, "context.md")
+}
+
+#[tauri::command]
+fn synthesize_patterns(app: tauri::AppHandle) -> Result<(), String> {
+    let cfg = config::load(&app)?;
+    let workspace = cfg
+        .workspace
+        .clone()
+        .ok_or_else(|| "尚未设置工作区".to_string())?;
+
+    let mut sections: Vec<String> = Vec::new();
+    for parent_name in ["projects", "archive"] {
+        let parent = workspace.join(parent_name);
+        if !parent.exists() {
+            continue;
+        }
+        let read = match std::fs::read_dir(&parent) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        for entry in read.flatten() {
+            let p = entry.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let journal = memory::read_project(&p, "journal.md").unwrap_or_default();
+            if journal.trim().is_empty() {
+                continue;
+            }
+            let project_name = entry.file_name().to_string_lossy().to_string();
+            sections.push(format!(
+                "# {project_name} ({parent_name})\n\n{}",
+                journal.trim()
+            ));
+        }
+    }
+
+    if sections.is_empty() {
+        return Err("还没有可供归纳的协作日志,先完成几次 dazi 会话再来复盘".into());
+    }
+
+    let combined = sections.join("\n\n---\n\n");
+    let home = std::env::var("HOME").map_err(|e| format!("无法读取 HOME: {e}"))?;
+    let dazi_dir = PathBuf::from(&home).join(".dazi");
+    std::fs::create_dir_all(&dazi_dir).map_err(|e| format!("创建 ~/.dazi 失败: {e}"))?;
+    let temp_path = dazi_dir.join(".synthesize-input.md");
+    std::fs::write(&temp_path, &combined).map_err(|e| format!("写入临时文件失败: {e}"))?;
+
+    let temp_str = temp_path.display().to_string();
+    let patterns_str = dazi_dir.join("patterns.md").display().to_string();
+    let prompt = format!(
+        "这是 dazi 工作搭子的「复盘」流程,请按下列步骤执行:\n\n\
+         1. 用 Read 工具读取 {temp_str},里面是用户全部项目的协作日志拼接\n\
+         2. 归纳「至少出现两次」的反复模式:用户偏好、纠正点、工作风格\n\
+         3. 用 Read 读取 {patterns_str}(可能为空),再用 Edit 或 Write 工具增量更新它,保留仍然有效的旧条目\n\
+         4. 一次性决策、单次事件不要写进去\n\
+         5. 输出 markdown 列表风格,简短直接\n\
+         6. 完成后用 Bash 工具执行 `rm {temp_str}` 删除临时文件"
+    );
+
+    let kind = read_terminal_kind(&cfg.workspace);
+    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
+    run_in_terminal(&kind, &dazi_dir, Some(&cmd))?;
+    Ok(())
+}
+
+#[tauri::command]
 fn reveal_in_finder(app: tauri::AppHandle, path: PathBuf) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("路径不存在: {}", path.display()));
@@ -192,11 +287,11 @@ fn hand_off_to_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<Pr
 }
 
 fn build_handoff_prompt(project_path: &Path) -> String {
-    let abs = project_path.display();
+    let abs = project_path.display().to_string();
     let refs = project::list_references(project_path).unwrap_or_default();
-    if refs.is_empty() {
+    let refs_section = if refs.is_empty() {
         format!(
-            "项目根目录：{abs}。请阅读 README.md 了解项目背景与目标；当前 references/ 目录为空，如果信息不足请直接说明。先用一段话总结你的理解，再提出 3 个最有价值的下一步。"
+            "## 项目\n根目录：{abs}\n请阅读 README.md 了解项目背景与目标；当前 references/ 目录为空，如果信息不足请直接说明。"
         )
     } else {
         let list = refs
@@ -205,9 +300,55 @@ fn build_handoff_prompt(project_path: &Path) -> String {
             .collect::<Vec<_>>()
             .join("、");
         format!(
-            "项目根目录：{abs}。请阅读 README.md 与 references/ 下的资料（{list}），理解项目背景与目标后，先用一段话总结你的理解，再提出 3 个最有价值的下一步。"
+            "## 项目\n根目录：{abs}\n请阅读 README.md 与 references/ 下的资料（{list}），理解项目背景与目标。"
         )
+    };
+
+    let profile = memory::read_global("profile.md").unwrap_or_default();
+    let patterns = memory::read_global("patterns.md").unwrap_or_default();
+    let context = memory::read_project(project_path, "context.md").unwrap_or_default();
+    let journal_tail = memory::tail_journal(project_path, 5).unwrap_or_default();
+
+    let mut sections: Vec<String> = vec![refs_section];
+
+    if !profile.trim().is_empty() {
+        sections.push(format!(
+            "## 用户画像（来自 ~/.dazi/profile.md）\n{}",
+            profile.trim()
+        ));
     }
+    if !patterns.trim().is_empty() {
+        sections.push(format!(
+            "## 跨项目模式（来自 ~/.dazi/patterns.md）\n{}",
+            patterns.trim()
+        ));
+    }
+    if !context.trim().is_empty() {
+        sections.push(format!(
+            "## 本项目当前进展（来自 .dazi/context.md）\n{}",
+            context.trim()
+        ));
+    }
+    if !journal_tail.trim().is_empty() {
+        sections.push(format!(
+            "## 本项目最近协作日志（来自 .dazi/journal.md，最近 5 段）\n{}",
+            journal_tail.trim()
+        ));
+    }
+
+    sections.push(format!(
+        "## 任务\n先用一段话总结你对本项目的理解，再提出 3 个最有价值的下一步。\n\n\
+         ## 记忆回写约定（重要）\n会话结束前请按以下规则维护记忆，仅写下列文件，不要改动 meta.yml/README.md/references：\n\
+         1. 若本次出现新的、关于「用户偏好/工作风格」的稳定观察，使用 Edit 工具增量更新 `~/.dazi/profile.md`（不要全量重写；没有新观察就不动）。\n\
+         2. 使用 Write 工具覆写 `{abs}/.dazi/context.md`，反映本项目当前最新进展（一句话目标 + 进行中 + 下一步 + 已完成要点）。\n\
+         3. 使用 Edit 工具在 `{abs}/.dazi/journal.md` 末尾追加一段，格式：\n\
+         `## YYYY-MM-DD HH:MM`\n\
+         `- 讨论了 …`\n\
+         `- 决定 …`\n\
+         `- 待办 …`"
+    ));
+
+    sections.join("\n\n")
 }
 
 #[tauri::command]
@@ -300,6 +441,13 @@ pub fn run() {
             set_project_schedule,
             list_due_projects,
             record_project_run,
+            read_profile,
+            write_profile,
+            read_patterns,
+            write_patterns,
+            read_project_journal,
+            read_project_context,
+            synthesize_patterns,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

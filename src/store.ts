@@ -145,6 +145,13 @@ interface AppState {
     ok: boolean,
     message?: string
   ) => Promise<ProjectMeta>;
+  readProfile: () => Promise<string>;
+  writeProfile: (content: string) => Promise<void>;
+  readPatterns: () => Promise<string>;
+  writePatterns: (content: string) => Promise<void>;
+  readProjectJournal: (projectPath: string) => Promise<string>;
+  readProjectContext: (projectPath: string) => Promise<string>;
+  synthesizePatterns: () => Promise<void>;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -332,4 +339,14 @@ export const useApp = create<AppState>((set, get) => ({
       ok,
       message: message ?? null,
     }),
+
+  readProfile: () => invoke<string>("read_profile"),
+  writeProfile: (content) => invoke("write_profile", { content }),
+  readPatterns: () => invoke<string>("read_patterns"),
+  writePatterns: (content) => invoke("write_patterns", { content }),
+  readProjectJournal: (projectPath) =>
+    invoke<string>("read_project_journal", { projectPath }),
+  readProjectContext: (projectPath) =>
+    invoke<string>("read_project_context", { projectPath }),
+  synthesizePatterns: () => invoke("synthesize_patterns"),
 }));

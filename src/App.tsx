@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Trash2, Folder, FolderOpen, Clock, Repeat } from "lucide-react";
+import { Trash2, Folder, FolderOpen, Clock, Repeat, Settings } from "lucide-react";
 import { useApp, ProjectSummary, ProjectInit } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
+import { SettingsPanel } from "./SettingsPanel";
 import "./App.css";
 
 function formatNext(iso: string): string {
@@ -122,7 +123,13 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
   );
 }
 
-function ProjectList({ items }: { items: ProjectSummary[] }) {
+function ProjectList({
+  items,
+  onOpenSettings,
+}: {
+  items: ProjectSummary[];
+  onOpenSettings: () => void;
+}) {
   const selectedSlug = useApp((s) => s.selectedSlug);
   const selectProject = useApp((s) => s.selectProject);
   const showArchived = useApp((s) => s.showArchived);
@@ -185,14 +192,23 @@ function ProjectList({ items }: { items: ProjectSummary[] }) {
         <h2 className="text-sm font-semibold text-gray-700">
           {showArchived ? "已归档" : "工作任务"}
         </h2>
-        {!showArchived && (
+        <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setCreating((v) => !v)}
-            className="rounded-md bg-indigo-600/90 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-600"
+            onClick={onOpenSettings}
+            title="我的记忆"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
           >
-            {creating ? "取消" : "+ 新建"}
+            <Settings size={14} />
           </button>
-        )}
+          {!showArchived && (
+            <button
+              onClick={() => setCreating((v) => !v)}
+              className="rounded-md bg-indigo-600/90 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-600"
+            >
+              {creating ? "取消" : "+ 新建"}
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex border-b border-white/40 text-[11px]">
         <button
@@ -320,6 +336,7 @@ export default function App() {
   const selectedSlug = useApp((s) => s.selectedSlug);
   const loadConfig = useApp((s) => s.loadConfig);
   const refreshProjects = useApp((s) => s.refreshProjects);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -352,8 +369,9 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <ProjectList items={items} />
+      <ProjectList items={items} onOpenSettings={() => setSettingsOpen(true)} />
       <ProjectDetail project={selected} />
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

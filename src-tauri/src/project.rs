@@ -190,6 +190,7 @@ pub fn create_project_with(
     for sub in ["references", "notes", "output"] {
         std::fs::create_dir_all(project_path.join(sub)).map_err(|e| e.to_string())?;
     }
+    crate::memory::init_project_memory(&project_path)?;
 
     let now = Utc::now();
     let meta = ProjectMeta {

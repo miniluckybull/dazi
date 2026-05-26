@@ -8,9 +8,45 @@ import {
   Archive,
   Eye,
   Pencil,
+  Brain,
 } from "lucide-react";
 import { ProjectSummary, useApp } from "./store";
 import { ScheduleEditor } from "./ScheduleEditor";
+import { MemoryPanel } from "./MemoryPanel";
+
+function MemoryBadge({
+  layers,
+}: {
+  layers: { profile: boolean; patterns: boolean; project: boolean };
+}) {
+  const count =
+    (layers.profile ? 1 : 0) + (layers.patterns ? 1 : 0) + (layers.project ? 1 : 0);
+  if (count === 0) {
+    return (
+      <span
+        title="启动 dazi 时没有可注入的记忆。先在「我的记忆」补充画像，或完成一次会话生成项目记忆。"
+        className="flex items-center gap-1 rounded-md border border-white/60 bg-white/60 px-2 py-1 text-[10px] text-gray-400"
+      >
+        <Brain size={11} />
+        无记忆
+      </span>
+    );
+  }
+  const tip = [
+    layers.profile ? "用户画像 ✓" : "用户画像 —",
+    layers.patterns ? "跨项目模式 ✓" : "跨项目模式 —",
+    layers.project ? "本项目记忆 ✓" : "本项目记忆 —",
+  ].join("\n");
+  return (
+    <span
+      title={`启动 dazi 时会注入：\n${tip}`}
+      className="flex items-center gap-1 rounded-md border border-indigo-300/70 bg-indigo-50/80 px-2 py-1 text-[10px] font-medium text-indigo-700"
+    >
+      <Brain size={11} />
+      记忆 {count}/3
+    </span>
+  );
+}
 
 function IconButton({
   title,
@@ -47,6 +83,10 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const handOffToClaude = useApp((s) => s.handOffToClaude);
   const archiveProject = useApp((s) => s.archiveProject);
   const refreshProjects = useApp((s) => s.refreshProjects);
+  const readProfile = useApp((s) => s.readProfile);
+  const readPatterns = useApp((s) => s.readPatterns);
+  const readProjectJournal = useApp((s) => s.readProjectJournal);
+  const readProjectContext = useApp((s) => s.readProjectContext);
 
   const [readme, setReadme] = useState<string>("");
   const [savingReadme, setSavingReadme] = useState(false);
@@ -54,6 +94,12 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewOnly, setPreviewOnly] = useState(false);
+  const [tab, setTab] = useState<"readme" | "memory">("readme");
+  const [memoryLayers, setMemoryLayers] = useState({
+    profile: false,
+    patterns: false,
+    project: false,
+  });
   const lastLoadedSlug = useRef<string | null>(null);
   const saveTimer = useRef<number | null>(null);
 
@@ -95,6 +141,30 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
       .then((r) => setReadme(r))
       .catch(() => {});
   }, [project, readReadme]);
+
+  useEffect(() => {
+    if (!project) {
+      setMemoryLayers({ profile: false, patterns: false, project: false });
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      readProfile().catch(() => ""),
+      readPatterns().catch(() => ""),
+      readProjectContext(project.path).catch(() => ""),
+      readProjectJournal(project.path).catch(() => ""),
+    ]).then(([p, pa, ctx, j]) => {
+      if (cancelled) return;
+      setMemoryLayers({
+        profile: p.trim().length > 0,
+        patterns: pa.trim().length > 0,
+        project: ctx.trim().length > 0 || j.trim().length > 0,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [project, readProfile, readPatterns, readProjectContext, readProjectJournal]);
 
   useEffect(() => {
     if (!project || !readmeDirty) return;
@@ -184,6 +254,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                 导入中…
               </span>
             )}
+            <MemoryBadge layers={memoryLayers} />
             <IconButton
               title={previewOnly ? "切回编辑" : "预览"}
               onClick={() => setPreviewOnly((v) => !v)}
@@ -211,23 +282,51 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
         </div>
       </header>
       <ScheduleEditor project={project} />
+      <div className="flex border-b border-white/40 bg-white/45 px-4 text-xs backdrop-blur">
+        <button
+          onClick={() => setTab("readme")}
+          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+            tab === "readme"
+              ? "border-indigo-500 font-medium text-gray-800"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          README
+        </button>
+        <button
+          onClick={() => setTab("memory")}
+          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+            tab === "memory"
+              ? "border-indigo-500 font-medium text-gray-800"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          协作记忆
+        </button>
+      </div>
       <div className="flex flex-1 overflow-hidden">
-        <section className="flex-1 overflow-y-auto bg-white/70 backdrop-blur-sm">
-          <div data-color-mode="light" className="h-full">
-            <MDEditor
-              value={readme}
-              onChange={(v) => {
-                setReadme(v ?? "");
-                setReadmeDirty(true);
-              }}
-              height="100%"
-              preview={previewOnly ? "preview" : "edit"}
-              hideToolbar={previewOnly}
-              visibleDragbar={false}
-              extraCommands={[]}
-            />
-          </div>
-        </section>
+        {tab === "readme" ? (
+          <section className="flex-1 overflow-y-auto bg-white/70 backdrop-blur-sm">
+            <div data-color-mode="light" className="h-full">
+              <MDEditor
+                value={readme}
+                onChange={(v) => {
+                  setReadme(v ?? "");
+                  setReadmeDirty(true);
+                }}
+                height="100%"
+                preview={previewOnly ? "preview" : "edit"}
+                hideToolbar={previewOnly}
+                visibleDragbar={false}
+                extraCommands={[]}
+              />
+            </div>
+          </section>
+        ) : (
+          <section className="flex-1 overflow-hidden">
+            <MemoryPanel project={project} />
+          </section>
+        )}
       </div>
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-indigo-500/10 backdrop-blur-[2px]">
