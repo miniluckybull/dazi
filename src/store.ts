@@ -5,6 +5,46 @@ export interface AppConfig {
   workspace: string | null;
 }
 
+export type TaskType = "oneoff" | "scheduled" | "recurring";
+export type IntervalUnit = "minute" | "hour" | "day" | "week" | "month";
+
+export interface Interval {
+  every: number;
+  unit: IntervalUnit;
+}
+
+export interface Schedule {
+  run_at?: string | null;
+  interval?: Interval | null;
+  ends_at?: string | null;
+  max_runs?: number | null;
+}
+
+export interface OnTrigger {
+  action: "notify" | "handoff";
+}
+
+export interface SchedulePatch {
+  task_type: TaskType;
+  schedule?: Schedule | null;
+  on_trigger?: OnTrigger | null;
+}
+
+export interface RunRecord {
+  at: string;
+  action: string;
+  ok: boolean;
+  message?: string | null;
+}
+
+export interface DueProject {
+  slug: string;
+  name: string;
+  path: string;
+  action: string;
+  due_at: string;
+}
+
 export interface ProjectSummary {
   slug: string;
   name: string;
@@ -17,6 +57,8 @@ export interface ProjectSummary {
   has_references: boolean;
   handed_off_at: string | null;
   archived: boolean;
+  task_type: TaskType;
+  next_run_at: string | null;
 }
 
 export interface ProjectMeta {
@@ -31,6 +73,11 @@ export interface ProjectMeta {
   handed_off_at: string | null;
   created_at: string;
   updated_at: string;
+  task_type: TaskType;
+  schedule: Schedule | null;
+  on_trigger: OnTrigger | null;
+  runs: RunRecord[];
+  next_run_at: string | null;
 }
 
 export interface MetaPatch {
@@ -90,6 +137,14 @@ interface AppState {
   openTerminal: (path: string) => Promise<void>;
   handOffToClaude: (projectPath: string) => Promise<ProjectMeta>;
   archiveProject: (projectPath: string) => Promise<void>;
+  setSchedule: (projectPath: string, patch: SchedulePatch) => Promise<ProjectMeta>;
+  listDue: () => Promise<DueProject[]>;
+  recordRun: (
+    projectPath: string,
+    action: string,
+    ok: boolean,
+    message?: string
+  ) => Promise<ProjectMeta>;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -252,4 +307,29 @@ export const useApp = create<AppState>((set, get) => ({
     await get().refreshProjects();
     if (get().showArchived) await get().refreshArchived();
   },
+
+  setSchedule: async (projectPath, patch) => {
+    const meta = await invoke<ProjectMeta>("set_project_schedule", {
+      projectPath,
+      patch,
+    });
+    await get().refreshProjects();
+    return meta;
+  },
+
+  listDue: async () => {
+    const { config } = get();
+    if (!config?.workspace) return [];
+    return invoke<DueProject[]>("list_due_projects", {
+      workspace: config.workspace,
+    });
+  },
+
+  recordRun: async (projectPath, action, ok, message) =>
+    invoke<ProjectMeta>("record_project_run", {
+      projectPath,
+      action,
+      ok,
+      message: message ?? null,
+    }),
 }));

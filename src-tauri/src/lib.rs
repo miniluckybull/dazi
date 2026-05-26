@@ -1,11 +1,16 @@
 mod config;
 mod project;
+mod schedule;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use config::AppConfig;
-use project::{MetaPatch, ProjectInit, ProjectMeta, ProjectSummary, ReferenceEntry};
+use project::{
+    MetaPatch, OnTrigger, ProjectInit, ProjectMeta, ProjectSummary, ReferenceEntry, Schedule,
+};
+use serde::Deserialize;
+use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -89,6 +94,44 @@ fn import_project_references(
 #[tauri::command]
 fn archive_project(workspace: PathBuf, project_path: PathBuf) -> Result<PathBuf, String> {
     project::archive_project(&workspace, &project_path)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SchedulePatch {
+    pub task_type: String,
+    #[serde(default)]
+    pub schedule: Option<Schedule>,
+    #[serde(default)]
+    pub on_trigger: Option<OnTrigger>,
+}
+
+#[tauri::command]
+fn set_project_schedule(
+    project_path: PathBuf,
+    patch: SchedulePatch,
+) -> Result<ProjectMeta, String> {
+    let mut meta = project::read_meta(&project_path)?;
+    meta.task_type = patch.task_type;
+    meta.schedule = patch.schedule;
+    meta.on_trigger = patch.on_trigger;
+    meta.updated_at = chrono::Utc::now();
+    project::write_meta(&project_path, &meta)?;
+    schedule::recompute_and_save(&project_path)
+}
+
+#[tauri::command]
+fn list_due_projects(workspace: PathBuf) -> Result<Vec<schedule::DueProject>, String> {
+    Ok(schedule::scan_due(&workspace, chrono::Utc::now()))
+}
+
+#[tauri::command]
+fn record_project_run(
+    project_path: PathBuf,
+    action: String,
+    ok: bool,
+    message: Option<String>,
+) -> Result<ProjectMeta, String> {
+    schedule::record_run(&project_path, &action, ok, message)
 }
 
 #[tauri::command]
@@ -210,6 +253,32 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            // 启动时补算 next_run_at + 周期 tick（独立线程，每 60s 扫描一次）
+            std::thread::spawn(move || {
+                if let Ok(cfg) = config::load(&handle) {
+                    if let Some(ws) = cfg.workspace.clone() {
+                        schedule::refresh_all(&ws);
+                    }
+                }
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                    let Ok(cfg) = config::load(&handle) else {
+                        continue;
+                    };
+                    let Some(ws) = cfg.workspace.clone() else {
+                        continue;
+                    };
+                    let due = schedule::scan_due(&ws, chrono::Utc::now());
+                    for d in due {
+                        let _ = schedule::record_run(&d.path, &d.action, true, None);
+                        let _ = handle.emit("task-triggered", &d);
+                    }
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_workspace,
@@ -228,6 +297,9 @@ pub fn run() {
             hand_off_to_claude,
             reveal_references,
             archive_project,
+            set_project_schedule,
+            list_due_projects,
+            record_project_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

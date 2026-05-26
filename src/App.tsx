@@ -1,10 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Trash2, Folder, FolderOpen } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
+import { Trash2, Folder, FolderOpen, Clock, Repeat } from "lucide-react";
 import { useApp, ProjectSummary, ProjectInit } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
 import "./App.css";
+
+function formatNext(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (sameDay) return `今天 ${time}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+}
+
+function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const end = start + 24 * 3600 * 1000;
+  const t = d.getTime();
+  return t < end; // 包含逾期未触发的
+}
 
 function leftBorderColor(p: ProjectSummary): string {
   if (p.archived) return "border-l-emerald-300/80";
@@ -106,6 +131,19 @@ function ProjectList({ items }: { items: ProjectSummary[] }) {
   const revealReferences = useApp((s) => s.revealReferences);
   const refreshProjects = useApp((s) => s.refreshProjects);
   const [creating, setCreating] = useState(false);
+  const [todayOnly, setTodayOnly] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!todayOnly || showArchived) return items;
+    return items.filter((p) => p.next_run_at && isToday(p.next_run_at));
+  }, [items, todayOnly, showArchived]);
+  const todayCount = useMemo(
+    () =>
+      showArchived
+        ? 0
+        : items.filter((p) => p.next_run_at && isToday(p.next_run_at)).length,
+    [items, showArchived]
+  );
 
   useEffect(() => {
     if (showArchived) return;
@@ -181,15 +219,31 @@ function ProjectList({ items }: { items: ProjectSummary[] }) {
       {creating && !showArchived && (
         <NewTaskForm onCancel={() => setCreating(false)} />
       )}
+      {!showArchived && (
+        <div className="flex items-center justify-between border-b border-white/40 px-4 py-1.5 text-[11px]">
+          <button
+            onClick={() => setTodayOnly((v) => !v)}
+            className={`rounded-md px-2 py-0.5 transition ${
+              todayOnly
+                ? "bg-indigo-600/90 text-white"
+                : "bg-white/60 text-gray-600 hover:bg-white"
+            }`}
+          >
+            今日待办{todayCount > 0 ? ` · ${todayCount}` : ""}
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
-        {items.length === 0 && (
+        {filtered.length === 0 && (
           <p className="px-4 py-8 text-center text-sm text-gray-400">
             {showArchived
               ? "还没有归档的任务"
-              : "还没有任务，点击右上角 + 新建一个"}
+              : todayOnly
+                ? "今天没有待办的定时/循环任务"
+                : "还没有任务，点击右上角 + 新建一个"}
           </p>
         )}
-        {items.map((p) => (
+        {filtered.map((p) => (
           <div
             key={p.slug}
             onClick={() => selectProject(p.slug)}
@@ -201,9 +255,20 @@ function ProjectList({ items }: { items: ProjectSummary[] }) {
                 : "hover:bg-white/50"
             }`}
           >
-            <div className="truncate pr-7 text-sm font-medium text-gray-800">
-              {p.name}
+            <div className="flex items-center gap-1.5 truncate pr-7 text-sm font-medium text-gray-800">
+              {p.task_type === "scheduled" && (
+                <Clock size={12} className="shrink-0 text-sky-600" />
+              )}
+              {p.task_type === "recurring" && (
+                <Repeat size={12} className="shrink-0 text-emerald-600" />
+              )}
+              <span className="truncate">{p.name}</span>
             </div>
+            {p.next_run_at && (
+              <div className="mt-0.5 truncate pr-7 text-[11px] text-indigo-500">
+                下次：{formatNext(p.next_run_at)}
+              </div>
+            )}
             <div className="mt-1 flex items-center justify-between gap-2 pr-7">
               <span className="text-[11px] text-gray-400">
                 创建于 {new Date(p.created_at).toLocaleDateString()}
@@ -254,10 +319,26 @@ export default function App() {
   const showArchived = useApp((s) => s.showArchived);
   const selectedSlug = useApp((s) => s.selectedSlug);
   const loadConfig = useApp((s) => s.loadConfig);
+  const refreshProjects = useApp((s) => s.refreshProjects);
 
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    listen("task-triggered", () => {
+      refreshProjects();
+    }).then((un) => {
+      if (cancelled) un();
+      else unlisten = un;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [refreshProjects]);
 
   if (!config) {
     return <div className="h-full" />;

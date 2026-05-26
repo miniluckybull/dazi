@@ -22,6 +22,57 @@ pub struct ProjectMeta {
     pub handed_off_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default = "default_task_type")]
+    pub task_type: String,
+    #[serde(default)]
+    pub schedule: Option<Schedule>,
+    #[serde(default)]
+    pub on_trigger: Option<OnTrigger>,
+    #[serde(default)]
+    pub runs: Vec<RunRecord>,
+    #[serde(default)]
+    pub next_run_at: Option<DateTime<Utc>>,
+}
+
+fn default_task_type() -> String {
+    "oneoff".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Schedule {
+    #[serde(default)]
+    pub run_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub interval: Option<Interval>,
+    #[serde(default)]
+    pub ends_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub max_runs: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Interval {
+    pub every: u32,
+    pub unit: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct OnTrigger {
+    #[serde(default = "default_action")]
+    pub action: String,
+}
+
+fn default_action() -> String {
+    "notify".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RunRecord {
+    pub at: DateTime<Utc>,
+    pub action: String,
+    pub ok: bool,
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 fn default_status() -> String {
@@ -45,6 +96,8 @@ pub struct ProjectSummary {
     pub has_references: bool,
     pub handed_off_at: Option<DateTime<Utc>>,
     pub archived: bool,
+    pub task_type: String,
+    pub next_run_at: Option<DateTime<Utc>>,
 }
 
 const README_TEMPLATE: &str = "# {{name}}\n\n\
@@ -151,6 +204,11 @@ pub fn create_project_with(
         handed_off_at: None,
         created_at: now,
         updated_at: now,
+        task_type: default_task_type(),
+        schedule: None,
+        on_trigger: None,
+        runs: vec![],
+        next_run_at: None,
     };
     write_meta(&project_path, &meta)?;
 
@@ -169,6 +227,8 @@ pub fn create_project_with(
         has_references: false,
         handed_off_at: meta.handed_off_at,
         archived: false,
+        task_type: meta.task_type,
+        next_run_at: meta.next_run_at,
     })
 }
 
@@ -217,6 +277,8 @@ fn list_in_dir(parent: &Path, archived: bool) -> Result<Vec<ProjectSummary>, Str
                     has_references,
                     handed_off_at: meta.handed_off_at,
                     archived,
+                    task_type: meta.task_type,
+                    next_run_at: meta.next_run_at,
                 });
             }
             Err(_) => continue,

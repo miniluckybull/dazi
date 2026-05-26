@@ -10,6 +10,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { ProjectSummary, useApp } from "./store";
+import { ScheduleEditor } from "./ScheduleEditor";
 
 function IconButton({
   title,
@@ -209,6 +210,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
           </div>
         </div>
       </header>
+      <ScheduleEditor project={project} />
       <div className="flex flex-1 overflow-hidden">
         <section className="flex-1 overflow-y-auto bg-white/70 backdrop-blur-sm">
           <div data-color-mode="light" className="h-full">
