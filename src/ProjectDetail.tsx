@@ -4,9 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   FolderOpen,
-  Terminal,
   Rocket,
-  Copy,
   Archive,
   Eye,
   Pencil,
@@ -29,10 +27,10 @@ function IconButton({
   const base =
     "flex h-8 w-8 items-center justify-center rounded-md border transition";
   const cls = disabled
-    ? `${base} cursor-not-allowed border-gray-200 bg-gray-50 text-gray-300`
+    ? `${base} cursor-not-allowed border-white/40 bg-white/30 text-gray-300`
     : emphasis
-      ? `${base} border-amber-700 bg-amber-700 text-white hover:bg-amber-600`
-      : `${base} border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900`;
+      ? `${base} border-indigo-500/70 bg-indigo-600/90 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600`
+      : `${base} border-white/60 bg-white/70 text-gray-600 backdrop-blur hover:bg-white hover:text-gray-900`;
   return (
     <button title={title} onClick={onClick} disabled={disabled} className={cls}>
       {children}
@@ -45,7 +43,6 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const writeReadme = useApp((s) => s.writeReadme);
   const importReferences = useApp((s) => s.importReferences);
   const revealInFinder = useApp((s) => s.revealInFinder);
-  const openTerminal = useApp((s) => s.openTerminal);
   const handOffToClaude = useApp((s) => s.handOffToClaude);
   const archiveProject = useApp((s) => s.archiveProject);
   const refreshProjects = useApp((s) => s.refreshProjects);
@@ -56,7 +53,6 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewOnly, setPreviewOnly] = useState(false);
-  const [pathHint, setPathHint] = useState<string | null>(null);
   const lastLoadedSlug = useRef<string | null>(null);
   const saveTimer = useRef<number | null>(null);
 
@@ -64,17 +60,6 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     project?.requires_references && !project.has_references
       ? "此任务需要先放入参考资料后再启动 dazi"
       : null;
-
-  async function copyPath() {
-    if (!project) return;
-    try {
-      await navigator.clipboard.writeText(project.path);
-      setPathHint("已复制路径");
-    } catch {
-      setPathHint("复制失败");
-    }
-    window.setTimeout(() => setPathHint(null), 1500);
-  }
 
   async function archive() {
     if (!project) return;
@@ -172,7 +157,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
-      <header className="border-b border-gray-200 bg-white px-6 py-3">
+      <header className="border-b border-white/40 bg-white/55 px-6 py-3 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold text-gray-900">
@@ -182,7 +167,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
               className="mt-0.5 truncate text-xs text-gray-500"
               title={project.path}
             >
-              {pathHint ?? project.path}
+              {project.path}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -210,15 +195,6 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
             >
               <FolderOpen size={15} />
             </IconButton>
-            <IconButton
-              title="打开终端"
-              onClick={() => openTerminal(project.path)}
-            >
-              <Terminal size={15} />
-            </IconButton>
-            <IconButton title="复制路径" onClick={copyPath}>
-              <Copy size={15} />
-            </IconButton>
             <IconButton title="归档" onClick={archive}>
               <Archive size={15} />
             </IconButton>
@@ -234,7 +210,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
         </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <section className="flex-1 overflow-y-auto bg-white">
+        <section className="flex-1 overflow-y-auto bg-white/70 backdrop-blur-sm">
           <div data-color-mode="light" className="h-full">
             <MDEditor
               value={readme}
@@ -246,13 +222,14 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
               preview={previewOnly ? "preview" : "edit"}
               hideToolbar={previewOnly}
               visibleDragbar={false}
+              extraCommands={[]}
             />
           </div>
         </section>
       </div>
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-blue-500/10 backdrop-blur-[1px]">
-          <div className="rounded-lg border-2 border-dashed border-blue-500 bg-white/90 px-6 py-4 text-sm font-medium text-blue-700">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-indigo-500/10 backdrop-blur-[2px]">
+          <div className="rounded-xl border-2 border-dashed border-indigo-400 bg-white/85 px-6 py-4 text-sm font-medium text-indigo-700 shadow-glass-lg">
             松开以将文件复制到 references/
           </div>
         </div>

@@ -14,5 +14,22 @@ body {
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: #1f2937;
-  background: #f7f7f8;
+  background:
+    radial-gradient(
+      120% 80% at 0% 0%,
+      rgba(186, 230, 253, 0.55) 0%,
+      rgba(186, 230, 253, 0) 55%
+    ),
+    radial-gradient(
+      90% 70% at 100% 0%,
+      rgba(196, 181, 253, 0.45) 0%,
+      rgba(196, 181, 253, 0) 60%
+    ),
+    radial-gradient(
+      80% 70% at 100% 100%,
+      rgba(165, 243, 252, 0.4) 0%,
+      rgba(165, 243, 252, 0) 60%
+    ),
+    linear-gradient(180deg, #f5f7ff 0%, #eef2ff 100%);
+  background-attachment: fixed;
 }
