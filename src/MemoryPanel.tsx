@@ -29,8 +29,8 @@ export function MemoryPanel({ project }: { project: ProjectSummary }) {
         </div>
       )}
 
-      <section className="rounded-lg border border-white/50 bg-white/70 shadow-sm">
-        <header className="flex items-baseline justify-between border-b border-white/50 px-4 py-2">
+      <section className="rounded-lg border border-white/70 bg-white/70 shadow-sm">
+        <header className="flex items-baseline justify-between border-b border-white/70 px-4 py-2">
           <h3 className="text-sm font-semibold text-gray-800">当前进展</h3>
           <span className="text-[10px] text-gray-400">.dazi/context.md</span>
         </header>
@@ -45,8 +45,8 @@ export function MemoryPanel({ project }: { project: ProjectSummary }) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-white/50 bg-white/70 shadow-sm">
-        <header className="flex items-baseline justify-between border-b border-white/50 px-4 py-2">
+      <section className="rounded-lg border border-white/70 bg-white/70 shadow-sm">
+        <header className="flex items-baseline justify-between border-b border-white/70 px-4 py-2">
           <h3 className="text-sm font-semibold text-gray-800">协作日志</h3>
           <span className="text-[10px] text-gray-400">.dazi/journal.md</span>
         </header>

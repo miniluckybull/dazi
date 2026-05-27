@@ -107,7 +107,7 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
   const nextLabel = next ? next.toLocaleString() : "—";
 
   return (
-    <div className="border-b border-white/40 bg-white/40 px-6 py-2 text-xs backdrop-blur-xl">
+    <div className="border-b border-white/60 bg-white/40 px-6 py-2 text-xs backdrop-blur-xl">
       <div className="flex items-center gap-3">
         <span className="font-medium text-gray-700">
           类型：

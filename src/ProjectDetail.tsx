@@ -9,6 +9,9 @@ import {
   Eye,
   Pencil,
   Brain,
+  ArchiveRestore,
+  Sparkles,
+  RotateCw,
 } from "lucide-react";
 import { ProjectSummary, useApp } from "./store";
 import { ScheduleEditor } from "./ScheduleEditor";
@@ -81,7 +84,10 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const importReferences = useApp((s) => s.importReferences);
   const revealInFinder = useApp((s) => s.revealInFinder);
   const handOffToClaude = useApp((s) => s.handOffToClaude);
+  const continueWithClaude = useApp((s) => s.continueWithClaude);
   const archiveProject = useApp((s) => s.archiveProject);
+  const unarchiveProject = useApp((s) => s.unarchiveProject);
+  const extractSkill = useApp((s) => s.extractSkill);
   const refreshProjects = useApp((s) => s.refreshProjects);
   const readProfile = useApp((s) => s.readProfile);
   const readPatterns = useApp((s) => s.readPatterns);
@@ -116,6 +122,26 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     );
     if (!ok) return;
     await archiveProject(project.path);
+  }
+
+  async function unarchive() {
+    if (!project) return;
+    const ok = await ask(
+      `把「${project.name}」恢复到活动区？\n任务会从 archive/ 移回 projects/。`,
+      { title: "回到活动区", kind: "info" }
+    );
+    if (!ok) return;
+    await unarchiveProject(project.path);
+  }
+
+  async function callExtractSkill() {
+    if (!project) return;
+    const ok = await ask(
+      `把这次任务提炼为 Claude Code skill？\n会启动一个 Claude 会话，写入 ~/.claude/skills/${project.slug}/SKILL.md。`,
+      { title: "提炼为 skill", kind: "info" }
+    );
+    if (!ok) return;
+    await extractSkill(project.path);
   }
 
   async function callClaude() {
@@ -228,7 +254,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
-      <header className="border-b border-white/40 bg-white/55 px-6 py-3 backdrop-blur-xl">
+      <header className="border-b border-white/60 bg-white/55 px-6 py-3 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold text-gray-900">
@@ -255,34 +281,58 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
               </span>
             )}
             <MemoryBadge layers={memoryLayers} />
-            <IconButton
-              title={previewOnly ? "切回编辑" : "预览"}
-              onClick={() => setPreviewOnly((v) => !v)}
-            >
-              {previewOnly ? <Pencil size={15} /> : <Eye size={15} />}
-            </IconButton>
-            <IconButton
-              title="在 Finder 中显示"
-              onClick={() => revealInFinder(project.path)}
-            >
-              <FolderOpen size={15} />
-            </IconButton>
-            <IconButton title="归档" onClick={archive}>
-              <Archive size={15} />
-            </IconButton>
-            <IconButton
-              title={claudeBlocked ?? "启动 dazi"}
-              onClick={callClaude}
-              disabled={!!claudeBlocked}
-              emphasis
-            >
-              <Rocket size={15} />
-            </IconButton>
+            {project.archived ? (
+              <>
+                <IconButton title="回到活动区" onClick={unarchive}>
+                  <ArchiveRestore size={15} />
+                </IconButton>
+                <IconButton title="提炼为 skill" onClick={callExtractSkill} emphasis>
+                  <Sparkles size={15} />
+                </IconButton>
+              </>
+            ) : (
+              <>
+                <IconButton
+                  title={previewOnly ? "切回编辑" : "预览"}
+                  onClick={() => setPreviewOnly((v) => !v)}
+                >
+                  {previewOnly ? <Pencil size={15} /> : <Eye size={15} />}
+                </IconButton>
+                <IconButton
+                  title="在 Finder 中显示"
+                  onClick={() => revealInFinder(project.path)}
+                >
+                  <FolderOpen size={15} />
+                </IconButton>
+                <IconButton title="归档" onClick={archive}>
+                  <Archive size={15} />
+                </IconButton>
+                <IconButton
+                  title={
+                    project.handed_off_at
+                      ? "继续上次会话（不重新注入 prompt）"
+                      : "尚未启动过 dazi"
+                  }
+                  onClick={() => continueWithClaude(project.path)}
+                  disabled={!project.handed_off_at}
+                >
+                  <RotateCw size={15} />
+                </IconButton>
+                <IconButton
+                  title={claudeBlocked ?? "启动 dazi"}
+                  onClick={callClaude}
+                  disabled={!!claudeBlocked}
+                  emphasis
+                >
+                  <Rocket size={15} />
+                </IconButton>
+              </>
+            )}
           </div>
         </div>
       </header>
       <ScheduleEditor project={project} />
-      <div className="flex border-b border-white/40 bg-white/45 px-4 text-xs backdrop-blur">
+      <div className="flex border-b border-white/60 bg-white/45 px-4 text-xs backdrop-blur">
         <button
           onClick={() => setTab("readme")}
           className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${

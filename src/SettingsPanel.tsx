@@ -86,8 +86,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-      <div className="flex h-[80vh] w-[min(720px,90vw)] flex-col overflow-hidden rounded-2xl border border-white/50 bg-white/85 shadow-glass-lg backdrop-blur-xl">
-        <header className="flex items-center justify-between border-b border-white/40 px-5 py-3">
+      <div className="flex h-[80vh] w-[min(720px,90vw)] flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-glass-lg backdrop-blur-xl">
+        <header className="flex items-center justify-between border-b border-white/60 px-5 py-3">
           <div>
             <h2 className="text-base font-semibold text-gray-900">我的记忆</h2>
             <p className="text-[11px] text-gray-500">
@@ -106,7 +106,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </header>
-        <div className="flex border-b border-white/40 text-xs">
+        <div className="flex border-b border-white/60 text-xs">
           <button
             onClick={() => setTab("profile")}
             className={`flex-1 py-2 transition ${

@@ -51,7 +51,7 @@ function WorkspacePicker() {
 
   return (
     <div className="flex h-full items-center justify-center px-6">
-      <div className="max-w-md rounded-2xl border border-white/50 bg-white/55 px-8 py-10 text-center shadow-glass-lg backdrop-blur-xl">
+      <div className="max-w-md rounded-2xl border border-white/70 bg-white/55 px-8 py-10 text-center shadow-glass-lg backdrop-blur-xl">
         <h1 className="mb-2 text-2xl font-semibold text-gray-900">欢迎使用 Dazi</h1>
         <p className="mb-6 text-sm text-gray-600">
           选择一个文件夹作为工作区，所有任务都会以子目录形式保存在其中。
@@ -72,13 +72,12 @@ function WorkspacePicker() {
 function NewTaskForm({ onCancel }: { onCancel: () => void }) {
   const createProject = useApp((s) => s.createProject);
   const [name, setName] = useState("");
-  const [requiresRefs, setRequiresRefs] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     const init: ProjectInit = {
-      requires_references: requiresRefs,
+      requires_references: true,
     };
     await createProject(name.trim(), init);
     onCancel();
@@ -87,23 +86,15 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
   return (
     <form
       onSubmit={submit}
-      className="space-y-2 border-b border-white/40 bg-white/40 p-3 text-xs backdrop-blur"
+      className="space-y-2 border-b border-white/60 bg-white/40 p-3 text-xs backdrop-blur"
     >
       <input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="任务名称"
-        className="w-full rounded-md border border-white/60 bg-white/80 px-2 py-1.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+        className="w-full rounded-md border border-white/70 bg-white/80 px-2 py-1.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
       />
-      <label className="flex items-center gap-2 text-gray-700">
-        <input
-          type="checkbox"
-          checked={requiresRefs}
-          onChange={(e) => setRequiresRefs(e.target.checked)}
-        />
-        <span>需要参考资料才能启动 dazi</span>
-      </label>
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
@@ -114,7 +105,7 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-white/60 bg-white/70 px-3 py-1.5 text-xs text-gray-700 transition hover:bg-white"
+          className="rounded-md border border-white/70 bg-white/70 px-3 py-1.5 text-xs text-gray-700 transition hover:bg-white"
         >
           取消
         </button>
@@ -187,8 +178,8 @@ function ProjectList({
   }
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-white/40 bg-white/55 backdrop-blur-xl">
-      <div className="flex items-center justify-between border-b border-white/40 px-4 py-3">
+    <aside className="flex h-full w-72 flex-col border-r border-white/60 bg-white/55 backdrop-blur-xl">
+      <div className="flex items-center justify-between border-b border-white/60 px-4 py-3">
         <h2 className="text-sm font-semibold text-gray-700">
           {showArchived ? "已归档" : "工作任务"}
         </h2>
@@ -210,7 +201,7 @@ function ProjectList({
           )}
         </div>
       </div>
-      <div className="flex border-b border-white/40 text-[11px]">
+      <div className="flex border-b border-white/60 text-[11px]">
         <button
           onClick={() => setShowArchived(false)}
           className={`flex-1 py-1.5 transition ${
@@ -236,7 +227,7 @@ function ProjectList({
         <NewTaskForm onCancel={() => setCreating(false)} />
       )}
       {!showArchived && (
-        <div className="flex items-center justify-between border-b border-white/40 px-4 py-1.5 text-[11px]">
+        <div className="flex items-center justify-between border-b border-white/60 px-4 py-1.5 text-[11px]">
           <button
             onClick={() => setTodayOnly((v) => !v)}
             className={`rounded-md px-2 py-0.5 transition ${
@@ -263,7 +254,7 @@ function ProjectList({
           <div
             key={p.slug}
             onClick={() => selectProject(p.slug)}
-            className={`group relative block w-full cursor-pointer border-b border-white/40 border-l-4 ${leftBorderColor(
+            className={`group relative block w-full cursor-pointer border-b border-white/60 border-l-4 ${leftBorderColor(
               p
             )} px-4 py-3 text-left transition ${
               selectedSlug === p.slug

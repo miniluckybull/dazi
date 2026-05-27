@@ -97,6 +97,11 @@ fn archive_project(workspace: PathBuf, project_path: PathBuf) -> Result<PathBuf,
     project::archive_project(&workspace, &project_path)
 }
 
+#[tauri::command]
+fn unarchive_project(workspace: PathBuf, project_path: PathBuf) -> Result<PathBuf, String> {
+    project::unarchive_project(&workspace, &project_path)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SchedulePatch {
     pub task_type: String,
@@ -230,6 +235,52 @@ fn synthesize_patterns(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn extract_skill(app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
+    if !project_path.exists() {
+        return Err(format!("项目不存在: {}", project_path.display()));
+    }
+    let cfg = config::load(&app)?;
+    let meta = project::read_meta(&project_path)?;
+    let readme = project::read_readme(&project_path).unwrap_or_default();
+    let context = memory::read_project(&project_path, "context.md").unwrap_or_default();
+    let journal = memory::read_project(&project_path, "journal.md").unwrap_or_default();
+
+    let home = std::env::var("HOME").map_err(|e| format!("无法读取 HOME: {e}"))?;
+    let dazi_dir = PathBuf::from(&home).join(".dazi");
+    std::fs::create_dir_all(&dazi_dir).map_err(|e| format!("创建 ~/.dazi 失败: {e}"))?;
+    let temp_path = dazi_dir.join(".extract-skill-input.md");
+    let combined = format!(
+        "# 任务名称\n{}\n\n# slug\n{}\n\n# README.md\n{}\n\n# context.md\n{}\n\n# journal.md\n{}\n",
+        meta.name,
+        meta.slug,
+        readme.trim(),
+        context.trim(),
+        journal.trim()
+    );
+    std::fs::write(&temp_path, &combined).map_err(|e| format!("写入临时文件失败: {e}"))?;
+
+    let temp_str = temp_path.display().to_string();
+    let skill_dir = format!("~/.claude/skills/{}", meta.slug);
+    let skill_path = format!("{skill_dir}/SKILL.md");
+    let prompt = format!(
+        "这是 dazi 工作搭子的「提炼为 skill」流程,请按下列步骤执行:\n\n\
+         1. 用 Read 工具读取 {temp_str},里面是这次任务的 README、context、journal\n\
+         2. 把这次任务沉淀的可复用经验提炼成一个 Claude Code skill,目标路径 {skill_path}\n\
+         3. 用 Bash 执行 `mkdir -p {skill_dir}` 确保目录存在\n\
+         4. 用 Write 工具写入 {skill_path},内容必须是合法的 Claude Code skill 格式:\n   \
+            开头是 frontmatter,包含 name(用 slug)和 description(一句话说明何时启用该 skill);\n   \
+            正文用 markdown 描述触发场景、关键步骤、易踩的坑、可复用的命令或片段\n\
+         5. 只总结真正可复用的经验,一次性的细节不要写进去\n\
+         6. 完成后用 Bash 执行 `rm {temp_str}` 删除临时文件"
+    );
+
+    let kind = read_terminal_kind(&cfg.workspace);
+    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
+    run_in_terminal(&kind, &dazi_dir, Some(&cmd))?;
+    Ok(())
+}
+
+#[tauri::command]
 fn reveal_in_finder(app: tauri::AppHandle, path: PathBuf) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("路径不存在: {}", path.display()));
@@ -260,7 +311,12 @@ fn read_terminal_kind(workspace: &Option<PathBuf>) -> String {
 }
 
 fn escape_applescript(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    // 反斜杠和双引号要转义；反引号和 $ 在 shell 双引号里会触发命令替换/变量展开,
+    // 而我们最终把整段拼进 `claude "..."` 用 osascript do script 执行,所以一并转义掉。
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('`', "\\`")
+        .replace('$', "\\$")
 }
 
 #[tauri::command]
@@ -284,6 +340,16 @@ fn hand_off_to_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<Pr
     let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
     run_in_terminal(&kind, &project_path, Some(&cmd))?;
     project::mark_handed_off(&project_path)
+}
+
+#[tauri::command]
+fn continue_with_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
+    if !project_path.exists() {
+        return Err(format!("项目不存在: {}", project_path.display()));
+    }
+    let cfg = config::load(&app)?;
+    let kind = read_terminal_kind(&cfg.workspace);
+    run_in_terminal(&kind, &project_path, Some("claude -c"))
 }
 
 fn build_handoff_prompt(project_path: &Path) -> String {
@@ -339,13 +405,13 @@ fn build_handoff_prompt(project_path: &Path) -> String {
     sections.push(format!(
         "## 任务\n先用一段话总结你对本项目的理解，再提出 3 个最有价值的下一步。\n\n\
          ## 记忆回写约定（重要）\n会话结束前请按以下规则维护记忆，仅写下列文件，不要改动 meta.yml/README.md/references：\n\
-         1. 若本次出现新的、关于「用户偏好/工作风格」的稳定观察，使用 Edit 工具增量更新 `~/.dazi/profile.md`（不要全量重写；没有新观察就不动）。\n\
-         2. 使用 Write 工具覆写 `{abs}/.dazi/context.md`，反映本项目当前最新进展（一句话目标 + 进行中 + 下一步 + 已完成要点）。\n\
-         3. 使用 Edit 工具在 `{abs}/.dazi/journal.md` 末尾追加一段，格式：\n\
-         `## YYYY-MM-DD HH:MM`\n\
-         `- 讨论了 …`\n\
-         `- 决定 …`\n\
-         `- 待办 …`"
+         1. 若本次出现新的、关于「用户偏好/工作风格」的稳定观察，使用 Edit 工具增量更新 「~/.dazi/profile.md」（不要全量重写；没有新观察就不动）。\n\
+         2. 使用 Write 工具覆写 「{abs}/.dazi/context.md」，反映本项目当前最新进展（一句话目标 + 进行中 + 下一步 + 已完成要点）。\n\
+         3. 使用 Edit 工具在 「{abs}/.dazi/journal.md」 末尾追加一段，格式：\n\
+         ## YYYY-MM-DD HH:MM\n\
+         - 讨论了 …\n\
+         - 决定 …\n\
+         - 待办 …"
     ));
 
     sections.join("\n\n")
@@ -436,6 +502,7 @@ pub fn run() {
             reveal_in_finder,
             open_terminal,
             hand_off_to_claude,
+            continue_with_claude,
             reveal_references,
             archive_project,
             set_project_schedule,
@@ -448,6 +515,8 @@ pub fn run() {
             read_project_journal,
             read_project_context,
             synthesize_patterns,
+            unarchive_project,
+            extract_skill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

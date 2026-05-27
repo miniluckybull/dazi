@@ -570,3 +570,29 @@ fn unique_archive_dest(dir: &Path, name: &str) -> PathBuf {
     }
     dir.join(format!("{name}-{}", Utc::now().timestamp()))
 }
+
+pub fn unarchive_project(workspace: &Path, project_path: &Path) -> Result<PathBuf, String> {
+    if !project_path.exists() {
+        return Err(format!("项目不存在: {}", project_path.display()));
+    }
+    let meta = read_meta(project_path)?;
+    let projects = projects_dir(workspace);
+    std::fs::create_dir_all(&projects).map_err(|e| e.to_string())?;
+    let dir_name = project_path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| meta.slug.clone());
+    let dest = unique_archive_dest(&projects, &dir_name);
+
+    match std::fs::rename(project_path, &dest) {
+        Ok(_) => {}
+        Err(_) => {
+            copy_dir_all(project_path, &dest)?;
+            std::fs::remove_dir_all(project_path).map_err(|e| e.to_string())?;
+        }
+    }
+    // 回到活动区时清掉归档时生成的 summary.md（如果还在）
+    let _ = std::fs::remove_file(dest.join("summary.md"));
+    bump_updated_at(&dest)?;
+    Ok(dest)
+}

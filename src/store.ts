@@ -136,7 +136,10 @@ interface AppState {
   revealReferences: (projectPath: string) => Promise<void>;
   openTerminal: (path: string) => Promise<void>;
   handOffToClaude: (projectPath: string) => Promise<ProjectMeta>;
+  continueWithClaude: (projectPath: string) => Promise<void>;
   archiveProject: (projectPath: string) => Promise<void>;
+  unarchiveProject: (projectPath: string) => Promise<void>;
+  extractSkill: (projectPath: string) => Promise<void>;
   setSchedule: (projectPath: string, patch: SchedulePatch) => Promise<ProjectMeta>;
   listDue: () => Promise<DueProject[]>;
   recordRun: (
@@ -303,6 +306,9 @@ export const useApp = create<AppState>((set, get) => ({
     return meta;
   },
 
+  continueWithClaude: (projectPath) =>
+    invoke("continue_with_claude", { projectPath }),
+
   archiveProject: async (projectPath) => {
     const { config } = get();
     if (!config?.workspace) return;
@@ -313,6 +319,22 @@ export const useApp = create<AppState>((set, get) => ({
     set({ selectedSlug: null });
     await get().refreshProjects();
     if (get().showArchived) await get().refreshArchived();
+  },
+
+  unarchiveProject: async (projectPath) => {
+    const { config } = get();
+    if (!config?.workspace) return;
+    await invoke("unarchive_project", {
+      workspace: config.workspace,
+      projectPath,
+    });
+    set({ selectedSlug: null });
+    await get().refreshProjects();
+    if (get().showArchived) await get().refreshArchived();
+  },
+
+  extractSkill: async (projectPath) => {
+    await invoke("extract_skill", { projectPath });
   },
 
   setSchedule: async (projectPath, patch) => {
