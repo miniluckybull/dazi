@@ -48,6 +48,8 @@ pub struct Schedule {
     pub ends_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub max_runs: Option<u32>,
+    #[serde(default)]
+    pub paused: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -101,10 +103,21 @@ pub struct ProjectSummary {
 }
 
 const README_TEMPLATE: &str = "# {{name}}\n\n\
+> 这份 README 同时也是交给 Claude 的提示词。把背景、目标、约束写清楚，Claude 拿到的上下文就越完整。\n\n\
+## 角色\n\n\
+（希望 Claude 以什么身份介入？例如：资深前端工程师 / 数据分析师 / 文案编辑）\n\n\
 ## 背景\n\n\
-（描述项目的来龙去脉、为什么要做）\n\n\
+（这件事的来龙去脉：从哪儿来、为什么现在做、相关的人或系统）\n\n\
 ## 目标\n\n\
-（这个项目要达成什么具体结果）\n\n\
+（这次协作要达成的具体结果，越可衡量越好）\n\n\
+## 关键输入\n\n\
+- references/ 下的资料：（列出文件作用，没有就写「暂无」）\n\
+- 其它需要 Claude 知道的事实、链接、数据\n\n\
+## 约束与偏好\n\n\
+- （必须遵守的规则：技术栈、风格、不能改的东西）\n\
+- （应当避免的做法）\n\n\
+## 交付物\n\n\
+（期望产出什么：文件、代码改动、文档、结论…… 以及格式要求）\n\n\
 ## 验收标准\n\n\
 - [ ] \n- [ ] \n\n\
 ## 备注\n\n";

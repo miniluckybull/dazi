@@ -4,17 +4,18 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   FolderOpen,
-  Rocket,
   Archive,
-  Eye,
-  Pencil,
   Brain,
   ArchiveRestore,
   Sparkles,
-  RotateCw,
+  MessageCircle,
+  Zap,
+  Clock,
+  Repeat,
+  ChevronDown,
 } from "lucide-react";
-import { ProjectSummary, useApp } from "./store";
-import { ScheduleEditor } from "./ScheduleEditor";
+import { ProjectSummary, TaskType, useApp } from "./store";
+import { ScheduleConfigModal } from "./ScheduleEditor";
 import { MemoryPanel } from "./MemoryPanel";
 
 function MemoryBadge({
@@ -56,26 +57,47 @@ function IconButton({
   onClick,
   disabled,
   emphasis,
+  tone,
   children,
 }: {
   title: string;
   onClick: () => void;
   disabled?: boolean;
   emphasis?: boolean;
+  tone?: "blue" | "orange";
   children: React.ReactNode;
 }) {
   const base =
     "flex h-8 w-8 items-center justify-center rounded-md border transition";
-  const cls = disabled
-    ? `${base} cursor-not-allowed border-white/40 bg-white/30 text-gray-300`
-    : emphasis
-      ? `${base} border-indigo-500/70 bg-indigo-600/90 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600`
-      : `${base} border-white/60 bg-white/70 text-gray-600 backdrop-blur hover:bg-white hover:text-gray-900`;
+  let cls: string;
+  if (disabled) {
+    cls = `${base} cursor-not-allowed border-white/40 bg-white/30 text-gray-300`;
+  } else if (tone === "orange") {
+    cls = `${base} border-amber-500/70 bg-amber-500/90 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500`;
+  } else if (tone === "blue") {
+    cls = `${base} border-sky-500/70 bg-sky-600/90 text-white shadow-sm shadow-sky-500/30 hover:bg-sky-600`;
+  } else if (emphasis) {
+    cls = `${base} border-indigo-500/70 bg-indigo-600/90 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600`;
+  } else {
+    cls = `${base} border-white/60 bg-white/70 text-gray-600 backdrop-blur hover:bg-white hover:text-gray-900`;
+  }
   return (
     <button title={title} onClick={onClick} disabled={disabled} className={cls}>
       {children}
     </button>
   );
+}
+
+function taskTypeIcon(t: TaskType) {
+  if (t === "scheduled") return <Clock size={13} />;
+  if (t === "recurring") return <Repeat size={13} />;
+  return <Zap size={13} />;
+}
+
+function taskTypeLabel(t: TaskType) {
+  if (t === "scheduled") return "定时";
+  if (t === "recurring") return "循环";
+  return "一次性";
 }
 
 export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
@@ -99,8 +121,8 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [readmeDirty, setReadmeDirty] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [previewOnly, setPreviewOnly] = useState(false);
   const [tab, setTab] = useState<"readme" | "memory">("readme");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [memoryLayers, setMemoryLayers] = useState({
     profile: false,
     patterns: false,
@@ -108,11 +130,6 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   });
   const lastLoadedSlug = useRef<string | null>(null);
   const saveTimer = useRef<number | null>(null);
-
-  const claudeBlocked =
-    project?.requires_references && !project.has_references
-      ? "此任务需要先放入参考资料后再启动 dazi"
-      : null;
 
   async function archive() {
     if (!project) return;
@@ -145,9 +162,19 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   }
 
   async function callClaude() {
-    if (!project || claudeBlocked) return;
+    if (!project) return;
+    if (project.handed_off_at) {
+      // 继续上次会话
+      await continueWithClaude(project.path);
+      return;
+    }
+    const refsHint = project.has_references
+      ? "已检测到 references/ 中的资料。"
+      : project.requires_references
+        ? "⚠ 此任务标记为「需要参考资料」，但 references/ 当前为空，启动后 Claude 可能信息不足。"
+        : "references/ 当前为空，Claude 将仅基于 README.md 推进。";
     const ok = await ask(
-      `确认参考资料已经放入完整？\n启动后 Claude 会基于 README.md 与 references/ 中的资料推进任务。`,
+      `启动 dazi 协作？\n${refsHint}\n启动后 Claude 会基于 README.md 与 references/ 中的资料推进任务。`,
       { title: "启动 dazi", kind: "info" }
     );
     if (!ok) return;
@@ -252,6 +279,11 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     );
   }
 
+  const claudeTone = project.handed_off_at ? "orange" : "blue";
+  const claudeTitle = project.handed_off_at
+    ? "继续 claude 协作（不重新注入 prompt）"
+    : "启动 claude 协作";
+
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <header className="border-b border-white/60 bg-white/55 px-6 py-3 backdrop-blur-xl">
@@ -292,12 +324,14 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
               </>
             ) : (
               <>
-                <IconButton
-                  title={previewOnly ? "切回编辑" : "预览"}
-                  onClick={() => setPreviewOnly((v) => !v)}
+                <button
+                  title={`任务类型：${taskTypeLabel(project.task_type)}（点击配置）`}
+                  onClick={() => setScheduleOpen(true)}
+                  className="flex h-8 items-center gap-1 rounded-md border border-white/60 bg-white/70 px-2 text-gray-600 backdrop-blur transition hover:bg-white hover:text-gray-900"
                 >
-                  {previewOnly ? <Pencil size={15} /> : <Eye size={15} />}
-                </IconButton>
+                  {taskTypeIcon(project.task_type)}
+                  <ChevronDown size={11} />
+                </button>
                 <IconButton
                   title="在 Finder 中显示"
                   onClick={() => revealInFinder(project.path)}
@@ -308,30 +342,17 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                   <Archive size={15} />
                 </IconButton>
                 <IconButton
-                  title={
-                    project.handed_off_at
-                      ? "继续上次会话（不重新注入 prompt）"
-                      : "尚未启动过 dazi"
-                  }
-                  onClick={() => continueWithClaude(project.path)}
-                  disabled={!project.handed_off_at}
-                >
-                  <RotateCw size={15} />
-                </IconButton>
-                <IconButton
-                  title={claudeBlocked ?? "启动 dazi"}
+                  title={claudeTitle}
                   onClick={callClaude}
-                  disabled={!!claudeBlocked}
-                  emphasis
+                  tone={claudeTone}
                 >
-                  <Rocket size={15} />
+                  <MessageCircle size={15} />
                 </IconButton>
               </>
             )}
           </div>
         </div>
       </header>
-      <ScheduleEditor project={project} />
       <div className="flex border-b border-white/60 bg-white/45 px-4 text-xs backdrop-blur">
         <button
           onClick={() => setTab("readme")}
@@ -365,8 +386,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                   setReadmeDirty(true);
                 }}
                 height="100%"
-                preview={previewOnly ? "preview" : "edit"}
-                hideToolbar={previewOnly}
+                preview="edit"
                 visibleDragbar={false}
                 extraCommands={[]}
               />
@@ -385,6 +405,11 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
           </div>
         </div>
       )}
+      <ScheduleConfigModal
+        project={project}
+        open={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+      />
     </main>
   );
 }

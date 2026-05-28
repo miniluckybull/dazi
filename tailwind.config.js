@@ -3,6 +3,17 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      colors: {
+        brand: {
+          blue: "#0046FF",
+          teal: "#73C8D2",
+          cream: "#F5F1DC",
+          orange: "#FF9013",
+        },
+      },
+      borderColor: {
+        divider: "#94A3B8",
+      },
       boxShadow: {
         glass:
           "0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -12px rgba(79,70,229,0.18)",

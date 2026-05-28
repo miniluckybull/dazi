@@ -18,6 +18,7 @@ export interface Schedule {
   interval?: Interval | null;
   ends_at?: string | null;
   max_runs?: number | null;
+  paused?: boolean;
 }
 
 export interface OnTrigger {

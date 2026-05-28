@@ -425,9 +425,19 @@ fn reveal_references(app: tauri::AppHandle, project_path: PathBuf) -> Result<(),
         .map_err(|e| e.to_string())
 }
 
+fn derive_terminal_title(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "session".to_string());
+    format!("Dazi · {name}")
+}
+
 fn run_in_terminal(kind: &str, path: &Path, extra_cmd: Option<&str>) -> Result<(), String> {
     let path_str = path.to_string_lossy().to_string();
     let escaped_path = escape_applescript(&path_str);
+    let title = derive_terminal_title(path);
+    let escaped_title = escape_applescript(&title);
     let inner = match extra_cmd {
         Some(c) => {
             let escaped_cmd = escape_applescript(c);
@@ -437,11 +447,11 @@ fn run_in_terminal(kind: &str, path: &Path, extra_cmd: Option<&str>) -> Result<(
     };
     let script = if kind == "iTerm" {
         format!(
-            "tell application \"iTerm\"\n  activate\n  create window with default profile\n  tell current session of current window to write text \"{inner}\"\nend tell"
+            "tell application \"iTerm\"\n  activate\n  create window with default profile\n  tell current session of current window\n    set name to \"{escaped_title}\"\n    write text \"{inner}\"\n  end tell\nend tell"
         )
     } else {
         format!(
-            "tell application \"Terminal\"\n  activate\n  do script \"{inner}\"\nend tell"
+            "tell application \"Terminal\"\n  activate\n  do script \"{inner}\"\n  delay 0.1\n  set custom title of front window to \"{escaped_title}\"\nend tell"
         )
     };
     Command::new("osascript")

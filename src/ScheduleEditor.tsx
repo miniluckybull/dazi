@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pause, Play, X, Zap, Clock, Repeat } from "lucide-react";
 import {
   ProjectMeta,
   ProjectSummary,
@@ -9,11 +10,11 @@ import {
   useApp,
 } from "./store";
 
-const TYPE_LABEL: Record<TaskType, string> = {
-  oneoff: "一次性",
-  scheduled: "定时",
-  recurring: "循环",
-};
+const TYPE_OPTIONS: { value: TaskType; label: string; hint: string; Icon: typeof Zap }[] = [
+  { value: "oneoff", label: "一次性", hint: "做完就归档", Icon: Zap },
+  { value: "scheduled", label: "定时", hint: "在指定时间点提醒", Icon: Clock },
+  { value: "recurring", label: "循环", hint: "按固定间隔重复", Icon: Repeat },
+];
 
 const UNIT_LABEL: Record<IntervalUnit, string> = {
   minute: "分钟",
@@ -38,21 +39,30 @@ function fromLocalInput(v: string): string | null {
   return d.toISOString();
 }
 
-export function ScheduleEditor({ project }: { project: ProjectSummary }) {
+export function ScheduleConfigModal({
+  project,
+  open,
+  onClose,
+}: {
+  project: ProjectSummary;
+  open: boolean;
+  onClose: () => void;
+}) {
   const readMeta = useApp((s) => s.readMeta);
   const setSchedule = useApp((s) => s.setSchedule);
 
   const [meta, setMeta] = useState<ProjectMeta | null>(null);
-  const [open, setOpen] = useState(false);
   const [taskType, setTaskType] = useState<TaskType>("oneoff");
   const [runAtLocal, setRunAtLocal] = useState("");
   const [every, setEvery] = useState(1);
   const [unit, setUnit] = useState<IntervalUnit>("day");
   const [endsAtLocal, setEndsAtLocal] = useState("");
   const [maxRuns, setMaxRuns] = useState<string>("");
+  const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     let cancelled = false;
     readMeta(project.path)
       .then((m) => {
@@ -64,14 +74,15 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
         setUnit((m.schedule?.interval?.unit as IntervalUnit) ?? "day");
         setEndsAtLocal(toLocalInput(m.schedule?.ends_at));
         setMaxRuns(m.schedule?.max_runs ? String(m.schedule.max_runs) : "");
+        setPaused(!!m.schedule?.paused);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [project.slug, project.path, readMeta]);
+  }, [open, project.slug, project.path, readMeta]);
 
-  async function save() {
+  async function save(closeAfter = true) {
     setSaving(true);
     try {
       let schedule: Schedule | null = null;
@@ -89,6 +100,7 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
           interval: { every: e, unit },
           ends_at: endsAtLocal ? fromLocalInput(endsAtLocal) : null,
           max_runs: maxRuns ? Math.max(1, parseInt(maxRuns, 10)) : null,
+          paused,
         };
       }
       const patch: SchedulePatch = {
@@ -98,80 +110,122 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
       };
       const updated = await setSchedule(project.path, patch);
       setMeta(updated);
+      if (closeAfter) onClose();
     } finally {
       setSaving(false);
     }
   }
 
+  async function togglePause() {
+    const next = !paused;
+    setPaused(next);
+    if (taskType === "recurring") {
+      // 立刻持久化，避免用户关掉模态后没保存
+      setSaving(true);
+      try {
+        const e = Math.max(1, Math.floor(every));
+        const schedule: Schedule = {
+          run_at: runAtLocal ? fromLocalInput(runAtLocal) : null,
+          interval: { every: e, unit },
+          ends_at: endsAtLocal ? fromLocalInput(endsAtLocal) : null,
+          max_runs: maxRuns ? Math.max(1, parseInt(maxRuns, 10)) : null,
+          paused: next,
+        };
+        const updated = await setSchedule(project.path, {
+          task_type: "recurring",
+          schedule,
+          on_trigger: { action: "notify" },
+        });
+        setMeta(updated);
+      } finally {
+        setSaving(false);
+      }
+    }
+  }
+
+  if (!open) return null;
+
   const next = meta?.next_run_at ? new Date(meta.next_run_at) : null;
   const nextLabel = next ? next.toLocaleString() : "—";
 
   return (
-    <div className="border-b border-white/60 bg-white/40 px-6 py-2 text-xs backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <span className="font-medium text-gray-700">
-          类型：
-          <span className="ml-1 rounded bg-white/70 px-1.5 py-0.5 text-gray-900">
-            {TYPE_LABEL[taskType]}
-          </span>
-        </span>
-        <span className="text-gray-500">下次：{nextLabel}</span>
-        <button
-          className="ml-auto rounded border border-white/60 bg-white/70 px-2 py-1 text-gray-700 hover:bg-white"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? "收起" : "编辑"}
-        </button>
-      </div>
-      {open && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="flex items-center gap-2">
-            类型
-            <select
-              value={taskType}
-              onChange={(e) => setTaskType(e.target.value as TaskType)}
-              className="rounded border border-white/70 bg-white/80 px-1 py-0.5"
-            >
-              <option value="oneoff">一次性</option>
-              <option value="scheduled">定时</option>
-              <option value="recurring">循环</option>
-            </select>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-[420px] rounded-xl border border-white/60 bg-white/90 p-5 shadow-glass-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">任务调度</h2>
+          <button
+            onClick={onClose}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-white hover:text-gray-700"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-3 gap-1.5">
+          {TYPE_OPTIONS.map((t) => {
+            const Icon = t.Icon;
+            const active = taskType === t.value;
+            return (
+              <button
+                key={t.value}
+                onClick={() => setTaskType(t.value)}
+                className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition ${
+                  active
+                    ? "border-indigo-500/70 bg-indigo-50 text-indigo-700"
+                    : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
+                }`}
+                title={t.hint}
+              >
+                <Icon size={14} />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {taskType === "scheduled" && (
+          <label className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-700">
+            触发时间
+            <input
+              type="datetime-local"
+              value={runAtLocal}
+              onChange={(e) => setRunAtLocal(e.target.value)}
+              className="rounded border border-white/70 bg-white/80 px-2 py-1"
+            />
           </label>
-          {taskType === "scheduled" && (
-            <label className="flex items-center gap-2">
-              触发时间
+        )}
+
+        {taskType === "recurring" && (
+          <div className="space-y-2 text-xs text-gray-700">
+            <label className="flex items-center justify-between gap-2">
+              首次（可选）
               <input
                 type="datetime-local"
                 value={runAtLocal}
                 onChange={(e) => setRunAtLocal(e.target.value)}
-                className="rounded border border-white/70 bg-white/80 px-1 py-0.5"
+                className="rounded border border-white/70 bg-white/80 px-2 py-1"
               />
             </label>
-          )}
-          {taskType === "recurring" && (
-            <>
-              <label className="flex items-center gap-2">
-                首次（可选）
-                <input
-                  type="datetime-local"
-                  value={runAtLocal}
-                  onChange={(e) => setRunAtLocal(e.target.value)}
-                  className="rounded border border-white/70 bg-white/80 px-1 py-0.5"
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                间隔
+            <label className="flex items-center justify-between gap-2">
+              间隔
+              <span className="flex items-center gap-1">
                 <input
                   type="number"
                   min={1}
                   value={every}
                   onChange={(e) => setEvery(parseInt(e.target.value || "1", 10))}
-                  className="w-16 rounded border border-white/70 bg-white/80 px-1 py-0.5"
+                  className="w-16 rounded border border-white/70 bg-white/80 px-2 py-1"
                 />
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as IntervalUnit)}
-                  className="rounded border border-white/70 bg-white/80 px-1 py-0.5"
+                  className="rounded border border-white/70 bg-white/80 px-2 py-1"
                 >
                   {(Object.keys(UNIT_LABEL) as IntervalUnit[]).map((u) => (
                     <option key={u} value={u}>
@@ -179,31 +233,62 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="flex items-center gap-2">
-                截止（可选）
-                <input
-                  type="datetime-local"
-                  value={endsAtLocal}
-                  onChange={(e) => setEndsAtLocal(e.target.value)}
-                  className="rounded border border-white/70 bg-white/80 px-1 py-0.5"
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                最多次数（可选）
-                <input
-                  type="number"
-                  min={1}
-                  value={maxRuns}
-                  onChange={(e) => setMaxRuns(e.target.value)}
-                  className="w-20 rounded border border-white/70 bg-white/80 px-1 py-0.5"
-                />
-              </label>
-            </>
-          )}
-          <div className="col-span-2 flex justify-end">
+              </span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              截止（可选）
+              <input
+                type="datetime-local"
+                value={endsAtLocal}
+                onChange={(e) => setEndsAtLocal(e.target.value)}
+                className="rounded border border-white/70 bg-white/80 px-2 py-1"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              最多次数（可选）
+              <input
+                type="number"
+                min={1}
+                value={maxRuns}
+                onChange={(e) => setMaxRuns(e.target.value)}
+                className="w-20 rounded border border-white/70 bg-white/80 px-2 py-1"
+              />
+            </label>
+            <div className="flex items-center justify-between rounded-md border border-white/70 bg-white/70 px-2 py-1.5">
+              <span className="flex items-center gap-1.5">
+                {paused ? (
+                  <Pause size={13} className="text-amber-600" />
+                ) : (
+                  <Play size={13} className="text-emerald-600" />
+                )}
+                {paused ? "已暂停" : "运行中"}
+              </span>
+              <button
+                onClick={togglePause}
+                disabled={saving}
+                className={`rounded px-2 py-0.5 text-[11px] transition ${
+                  paused
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                    : "bg-amber-500 text-white hover:bg-amber-600"
+                } disabled:opacity-60`}
+              >
+                {paused ? "恢复" : "暂停"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
+          <span>下次：{nextLabel}</span>
+          <div className="flex gap-2">
             <button
-              onClick={save}
+              onClick={onClose}
+              className="rounded border border-white/60 bg-white/70 px-3 py-1 text-gray-700 hover:bg-white"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => save(true)}
               disabled={saving}
               className="rounded border border-indigo-500/70 bg-indigo-600/90 px-3 py-1 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600 disabled:opacity-60"
             >
@@ -211,7 +296,7 @@ export function ScheduleEditor({ project }: { project: ProjectSummary }) {
             </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

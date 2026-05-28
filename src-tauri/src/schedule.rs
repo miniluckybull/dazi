@@ -24,6 +24,9 @@ pub fn compute_next_run(meta: &ProjectMeta, now: DateTime<Utc>) -> Option<DateTi
         }
         "recurring" => {
             let sched = meta.schedule.as_ref()?;
+            if sched.paused {
+                return None;
+            }
             let interval = sched.interval.as_ref()?;
             // 达到次数上限
             if let Some(max) = sched.max_runs {

@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Trash2, Folder, FolderOpen, Clock, Repeat, Settings } from "lucide-react";
-import { useApp, ProjectSummary, ProjectInit } from "./store";
+import {
+  Trash2,
+  Folder,
+  FolderOpen,
+  Clock,
+  Repeat,
+  Zap,
+  Settings,
+} from "lucide-react";
+import { useApp, ProjectSummary, ProjectInit, TaskType } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
 import { SettingsPanel } from "./SettingsPanel";
 import "./App.css";
@@ -22,20 +30,25 @@ function formatNext(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
 }
 
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return false;
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const end = start + 24 * 3600 * 1000;
-  const t = d.getTime();
-  return t < end; // 包含逾期未触发的
-}
-
 function leftBorderColor(p: ProjectSummary): string {
   if (p.archived) return "border-l-emerald-300/80";
   if (p.handed_off_at) return "border-l-amber-400/90";
   return "border-l-sky-400/80";
+}
+
+function taskTypeBadgeIcon(t: TaskType, archived: boolean) {
+  if (archived) return null;
+  if (t === "scheduled")
+    return <Clock size={11} className="text-sky-600" />;
+  if (t === "recurring")
+    return <Repeat size={11} className="text-emerald-600" />;
+  return <Zap size={11} className="text-amber-500" />;
+}
+
+function taskTypeBadgeTitle(t: TaskType): string {
+  if (t === "scheduled") return "定时任务";
+  if (t === "recurring") return "循环任务";
+  return "一次性任务";
 }
 
 function WorkspacePicker() {
@@ -129,19 +142,6 @@ function ProjectList({
   const revealReferences = useApp((s) => s.revealReferences);
   const refreshProjects = useApp((s) => s.refreshProjects);
   const [creating, setCreating] = useState(false);
-  const [todayOnly, setTodayOnly] = useState(false);
-
-  const filtered = useMemo(() => {
-    if (!todayOnly || showArchived) return items;
-    return items.filter((p) => p.next_run_at && isToday(p.next_run_at));
-  }, [items, todayOnly, showArchived]);
-  const todayCount = useMemo(
-    () =>
-      showArchived
-        ? 0
-        : items.filter((p) => p.next_run_at && isToday(p.next_run_at)).length,
-    [items, showArchived]
-  );
 
   useEffect(() => {
     if (showArchived) return;
@@ -226,57 +226,37 @@ function ProjectList({
       {creating && !showArchived && (
         <NewTaskForm onCancel={() => setCreating(false)} />
       )}
-      {!showArchived && (
-        <div className="flex items-center justify-between border-b border-white/60 px-4 py-1.5 text-[11px]">
-          <button
-            onClick={() => setTodayOnly((v) => !v)}
-            className={`rounded-md px-2 py-0.5 transition ${
-              todayOnly
-                ? "bg-indigo-600/90 text-white"
-                : "bg-white/60 text-gray-600 hover:bg-white"
-            }`}
-          >
-            今日待办{todayCount > 0 ? ` · ${todayCount}` : ""}
-          </button>
-        </div>
-      )}
       <div className="flex-1 overflow-y-auto">
-        {filtered.length === 0 && (
+        {items.length === 0 && (
           <p className="px-4 py-8 text-center text-sm text-gray-400">
             {showArchived
               ? "还没有归档的任务"
-              : todayOnly
-                ? "今天没有待办的定时/循环任务"
-                : "还没有任务，点击右上角 + 新建一个"}
+              : "还没有任务，点击右上角 + 新建一个"}
           </p>
         )}
-        {filtered.map((p) => (
+        {items.map((p) => {
+          const active = selectedSlug === p.slug;
+          return (
           <div
             key={p.slug}
             onClick={() => selectProject(p.slug)}
             className={`group relative block w-full cursor-pointer border-b border-white/60 border-l-4 ${leftBorderColor(
               p
             )} px-4 py-3 text-left transition ${
-              selectedSlug === p.slug
-                ? "bg-indigo-50/70 shadow-sm"
+              active
+                ? "bg-indigo-100/90 shadow-inner ring-1 ring-inset ring-indigo-300/70"
                 : "hover:bg-white/50"
             }`}
           >
-            <div className="flex items-center gap-1.5 truncate pr-7 text-sm font-medium text-gray-800">
-              {p.task_type === "scheduled" && (
-                <Clock size={12} className="shrink-0 text-sky-600" />
-              )}
-              {p.task_type === "recurring" && (
-                <Repeat size={12} className="shrink-0 text-emerald-600" />
-              )}
-              <span className="truncate">{p.name}</span>
+            <div className={`truncate pr-12 text-sm font-medium ${active ? "text-indigo-900" : "text-gray-800"}`}>
+              {p.name}
             </div>
             {p.next_run_at && (
-              <div className="mt-0.5 truncate pr-7 text-[11px] text-indigo-500">
+              <div className="mt-0.5 truncate pr-12 text-[11px] text-indigo-500">
                 下次：{formatNext(p.next_run_at)}
               </div>
             )}
-            <div className="mt-1 flex items-center justify-between gap-2 pr-7">
+            <div className="mt-1 flex items-center justify-between gap-2 pr-12">
               <span className="text-[11px] text-gray-400">
                 创建于 {new Date(p.created_at).toLocaleDateString()}
               </span>
@@ -304,16 +284,25 @@ function ProjectList({
               )}
             </div>
             {!showArchived && (
+              <span
+                title={taskTypeBadgeTitle(p.task_type)}
+                className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded border border-white/70 bg-white/80 backdrop-blur"
+              >
+                {taskTypeBadgeIcon(p.task_type, p.archived)}
+              </span>
+            )}
+            {!showArchived && (
               <button
                 onClick={(e) => remove(p, e)}
                 title="移入回收站"
-                className="absolute right-2 top-2 rounded-md p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                className="absolute right-9 top-2 rounded-md p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
               >
                 <Trash2 size={14} />
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </aside>
   );
