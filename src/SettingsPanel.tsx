@@ -3,24 +3,29 @@ import { X, Sparkles } from "lucide-react";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { useApp } from "./store";
 
-type Tab = "profile" | "patterns";
+type Tab = "profile" | "facts" | "patterns";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const readProfile = useApp((s) => s.readProfile);
   const writeProfile = useApp((s) => s.writeProfile);
   const readPatterns = useApp((s) => s.readPatterns);
   const writePatterns = useApp((s) => s.writePatterns);
+  const readFacts = useApp((s) => s.readFacts);
+  const writeFacts = useApp((s) => s.writeFacts);
   const synthesizePatterns = useApp((s) => s.synthesizePatterns);
 
   const [tab, setTab] = useState<Tab>("profile");
   const [profile, setProfile] = useState("");
   const [patterns, setPatterns] = useState("");
+  const [facts, setFacts] = useState("");
   const [profileDirty, setProfileDirty] = useState(false);
   const [patternsDirty, setPatternsDirty] = useState(false);
+  const [factsDirty, setFactsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
   const profileTimer = useRef<number | null>(null);
   const patternsTimer = useRef<number | null>(null);
+  const factsTimer = useRef<number | null>(null);
 
   useEffect(() => {
     readProfile()
@@ -29,7 +34,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     readPatterns()
       .then((v) => setPatterns(v))
       .catch(() => {});
-  }, [readProfile, readPatterns]);
+    readFacts()
+      .then((v) => setFacts(v))
+      .catch(() => {});
+  }, [readProfile, readPatterns, readFacts]);
 
   useEffect(() => {
     if (!profileDirty) return;
@@ -65,7 +73,24 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     };
   }, [patterns, patternsDirty, writePatterns]);
 
-  const dirty = profileDirty || patternsDirty;
+  useEffect(() => {
+    if (!factsDirty) return;
+    if (factsTimer.current) window.clearTimeout(factsTimer.current);
+    factsTimer.current = window.setTimeout(async () => {
+      setSaving(true);
+      try {
+        await writeFacts(facts);
+        setFactsDirty(false);
+      } finally {
+        setSaving(false);
+      }
+    }, 600);
+    return () => {
+      if (factsTimer.current) window.clearTimeout(factsTimer.current);
+    };
+  }, [facts, factsDirty, writeFacts]);
+
+  const dirty = profileDirty || patternsDirty || factsDirty;
 
   async function runSynthesize() {
     if (synthesizing) return;
@@ -121,6 +146,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             </span>
           </button>
           <button
+            onClick={() => setTab("facts")}
+            className={`flex-1 py-2 transition ${
+              tab === "facts"
+                ? "bg-white/70 font-medium text-gray-800"
+                : "text-gray-500 hover:bg-white/40"
+            }`}
+          >
+            世界事实
+            <span className="ml-1.5 text-[10px] text-gray-400">
+              ~/.dazi/facts.md
+            </span>
+          </button>
+          <button
             onClick={() => setTab("patterns")}
             className={`flex-1 py-2 transition ${
               tab === "patterns"
@@ -139,7 +177,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <div className="flex h-full flex-col gap-2">
               <p className="text-[11px] leading-relaxed text-gray-500">
                 描述你是谁、工作偏好、协作风格、口头禅。Claude
-                每次会话都会读取，并在发现新观察时增量补充。
+                每次会话都会读取,并在发现新观察时增量补充。
               </p>
               <textarea
                 value={profile}
@@ -148,6 +186,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   setProfileDirty(true);
                 }}
                 placeholder={`# 关于我\n\n- 角色: \n- 技术栈: \n- 工作偏好: \n- 沟通风格: `}
+                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-indigo-300 focus:bg-white"
+              />
+            </div>
+          ) : tab === "facts" ? (
+            <div className="flex h-full flex-col gap-2">
+              <p className="text-[11px] leading-relaxed text-gray-500">
+                你世界里长期存在的实体:服务器、设备、人、账号、常用路径……不属于任一项目,但任一项目都可能用到。Claude 会自动把跨项目都用得上的事实回写到这里。
+              </p>
+              <textarea
+                value={facts}
+                onChange={(e) => {
+                  setFacts(e.target.value);
+                  setFactsDirty(true);
+                }}
+                placeholder={`# 我的世界\n\n## 基础设施\n- 大龙: 4090 服务器, ssh ...\n\n## 设备\n- ...\n\n## 常用账号 / 路径\n- ...`}
                 className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-indigo-300 focus:bg-white"
               />
             </div>

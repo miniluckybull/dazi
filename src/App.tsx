@@ -323,17 +323,18 @@ export default function App() {
   }, [loadConfig]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlisteners: Array<() => void> = [];
     let cancelled = false;
-    listen("task-triggered", () => {
-      refreshProjects();
-    }).then((un) => {
-      if (cancelled) un();
-      else unlisten = un;
-    });
+    const add = (p: Promise<() => void>) =>
+      p.then((un) => {
+        if (cancelled) un();
+        else unlisteners.push(un);
+      });
+    add(listen("task-triggered", () => refreshProjects()));
+    add(listen("task-completed", () => refreshProjects()));
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlisteners.forEach((un) => un());
     };
   }, [refreshProjects]);
 

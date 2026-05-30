@@ -62,6 +62,9 @@ pub struct Interval {
 pub struct OnTrigger {
     #[serde(default = "default_action")]
     pub action: String,
+    /// autopilot 时传给 claude 的 --model；为空用默认模型。
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 fn default_action() -> String {
@@ -163,10 +166,6 @@ fn sanitize_dir_name(input: &str) -> String {
         })
         .collect();
     cleaned.trim().trim_matches('.').to_string()
-}
-
-pub fn create_project(workspace: &Path, name: &str) -> Result<ProjectSummary, String> {
-    create_project_with(workspace, name, ProjectInit::default())
 }
 
 #[derive(Debug, Default, Deserialize)]

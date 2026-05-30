@@ -13,6 +13,7 @@ import {
   Clock,
   Repeat,
   ChevronDown,
+  PlayCircle,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
@@ -110,6 +111,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const archiveProject = useApp((s) => s.archiveProject);
   const unarchiveProject = useApp((s) => s.unarchiveProject);
   const extractSkill = useApp((s) => s.extractSkill);
+  const runAutopilotNow = useApp((s) => s.runAutopilotNow);
   const refreshProjects = useApp((s) => s.refreshProjects);
   const readProfile = useApp((s) => s.readProfile);
   const readPatterns = useApp((s) => s.readPatterns);
@@ -123,6 +125,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<"readme" | "memory">("readme");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [autopiloting, setAutopiloting] = useState(false);
   const [memoryLayers, setMemoryLayers] = useState({
     profile: false,
     patterns: false,
@@ -179,6 +182,21 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     );
     if (!ok) return;
     await handOffToClaude(project.path);
+  }
+
+  async function callAutopilotNow() {
+    if (!project || autopiloting) return;
+    const ok = await ask(
+      `立即自动执行一次？\nClaude 将以「跳过权限」模式无人值守运行，在项目目录内推进任务，结果写入 .dazi/journal.md。`,
+      { title: "立即自动执行", kind: "warning" }
+    );
+    if (!ok) return;
+    setAutopiloting(true);
+    try {
+      await runAutopilotNow(project.path);
+    } finally {
+      setAutopiloting(false);
+    }
   }
 
   useEffect(() => {
@@ -332,6 +350,17 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                   {taskTypeIcon(project.task_type)}
                   <ChevronDown size={11} />
                 </button>
+                {project.task_type !== "oneoff" && (
+                  <IconButton
+                    title={autopiloting ? "自动执行中…" : "立即自动执行一次"}
+                    onClick={callAutopilotNow}
+                  >
+                    <PlayCircle
+                      size={15}
+                      className={autopiloting ? "animate-pulse text-amber-600" : ""}
+                    />
+                  </IconButton>
+                )}
                 <IconButton
                   title="在 Finder 中显示"
                   onClick={() => revealInFinder(project.path)}

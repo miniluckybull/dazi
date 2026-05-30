@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-const GLOBAL_FILES: &[&str] = &["profile.md", "patterns.md", "changelog.md"];
+const GLOBAL_FILES: &[&str] = &["profile.md", "patterns.md", "facts.md", "changelog.md"];
 const PROJECT_FILES: &[&str] = &["journal.md", "context.md"];
 
 fn home_dir() -> Result<PathBuf, String> {

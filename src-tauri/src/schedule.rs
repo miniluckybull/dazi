@@ -134,6 +134,7 @@ pub struct DueProject {
     pub name: String,
     pub path: std::path::PathBuf,
     pub action: String,
+    pub model: Option<String>,
     pub due_at: DateTime<Utc>,
 }
 
@@ -154,11 +155,16 @@ pub fn scan_due(workspace: &Path, now: DateTime<Utc>) -> Vec<DueProject> {
             .as_ref()
             .map(|t| t.action.clone())
             .unwrap_or_else(|| "notify".to_string());
+        let model = meta
+            .on_trigger
+            .as_ref()
+            .and_then(|t| t.model.clone());
         out.push(DueProject {
             slug: s.slug,
             name: s.name,
             path: s.path,
             action,
+            model,
             due_at: due,
         });
     }

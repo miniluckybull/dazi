@@ -59,6 +59,8 @@ export function ScheduleConfigModal({
   const [endsAtLocal, setEndsAtLocal] = useState("");
   const [maxRuns, setMaxRuns] = useState<string>("");
   const [paused, setPaused] = useState(false);
+  const [triggerAction, setTriggerAction] = useState<"notify" | "autopilot">("notify");
+  const [riskAck, setRiskAck] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -75,6 +77,9 @@ export function ScheduleConfigModal({
         setEndsAtLocal(toLocalInput(m.schedule?.ends_at));
         setMaxRuns(m.schedule?.max_runs ? String(m.schedule.max_runs) : "");
         setPaused(!!m.schedule?.paused);
+        const act = m.on_trigger?.action === "autopilot" ? "autopilot" : "notify";
+        setTriggerAction(act);
+        setRiskAck(act === "autopilot");
       })
       .catch(() => {});
     return () => {
@@ -103,10 +108,17 @@ export function ScheduleConfigModal({
           paused,
         };
       }
+      // 一次性任务不支持 autopilot（无调度执行器触发），强制 notify。
+      const action: "notify" | "autopilot" =
+        taskType !== "oneoff" && triggerAction === "autopilot" ? "autopilot" : "notify";
+      if (action === "autopilot" && !riskAck) {
+        alert("自动执行会以跳过权限模式无人值守运行 Claude，请先勾选风险确认");
+        return;
+      }
       const patch: SchedulePatch = {
         task_type: taskType,
         schedule,
-        on_trigger: { action: "notify" },
+        on_trigger: { action },
       };
       const updated = await setSchedule(project.path, patch);
       setMeta(updated);
@@ -134,7 +146,9 @@ export function ScheduleConfigModal({
         const updated = await setSchedule(project.path, {
           task_type: "recurring",
           schedule,
-          on_trigger: { action: "notify" },
+          on_trigger: {
+            action: triggerAction === "autopilot" && riskAck ? "autopilot" : "notify",
+          },
         });
         setMeta(updated);
       } finally {
@@ -278,6 +292,50 @@ export function ScheduleConfigModal({
           </div>
         )}
 
+        {taskType !== "oneoff" && (
+          <div className="mt-3 space-y-2 rounded-md border border-white/70 bg-white/60 p-2.5 text-xs text-gray-700">
+            <div className="font-medium text-gray-800">到点动作</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTriggerAction("notify")}
+                className={`flex-1 rounded border px-2 py-1.5 transition ${
+                  triggerAction === "notify"
+                    ? "border-indigo-500/70 bg-indigo-50 text-indigo-700"
+                    : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
+                }`}
+              >
+                提醒我
+              </button>
+              <button
+                onClick={() => setTriggerAction("autopilot")}
+                className={`flex-1 rounded border px-2 py-1.5 transition ${
+                  triggerAction === "autopilot"
+                    ? "border-amber-500/70 bg-amber-50 text-amber-700"
+                    : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
+                }`}
+              >
+                自动执行
+              </button>
+            </div>
+            {triggerAction === "autopilot" && (
+              <div className="space-y-1.5 rounded border border-amber-300/70 bg-amber-50/70 p-2 text-[11px] text-amber-800">
+                <p>
+                  到点后会以「跳过权限」模式无人值守运行 Claude，它可在本项目目录内自主读写文件、执行命令。
+                  破坏性操作会被要求只记录待你确认，运行留痕在 .dazi/journal.md。
+                </p>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={riskAck}
+                    onChange={(e) => setRiskAck(e.target.checked)}
+                  />
+                  我已知晓风险，允许自动执行
+                </label>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
           <span>下次：{nextLabel}</span>
           <div className="flex gap-2">
@@ -289,7 +347,7 @@ export function ScheduleConfigModal({
             </button>
             <button
               onClick={() => save(true)}
-              disabled={saving}
+              disabled={saving || (triggerAction === "autopilot" && taskType !== "oneoff" && !riskAck)}
               className="rounded border border-indigo-500/70 bg-indigo-600/90 px-3 py-1 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600 disabled:opacity-60"
             >
               {saving ? "保存中…" : "保存"}

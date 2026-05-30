@@ -22,7 +22,8 @@ export interface Schedule {
 }
 
 export interface OnTrigger {
-  action: "notify" | "handoff";
+  action: "notify" | "handoff" | "autopilot";
+  model?: string | null;
 }
 
 export interface SchedulePatch {
@@ -43,6 +44,7 @@ export interface DueProject {
   name: string;
   path: string;
   action: string;
+  model?: string | null;
   due_at: string;
 }
 
@@ -141,6 +143,7 @@ interface AppState {
   archiveProject: (projectPath: string) => Promise<void>;
   unarchiveProject: (projectPath: string) => Promise<void>;
   extractSkill: (projectPath: string) => Promise<void>;
+  runAutopilotNow: (projectPath: string) => Promise<boolean>;
   setSchedule: (projectPath: string, patch: SchedulePatch) => Promise<ProjectMeta>;
   listDue: () => Promise<DueProject[]>;
   recordRun: (
@@ -153,6 +156,8 @@ interface AppState {
   writeProfile: (content: string) => Promise<void>;
   readPatterns: () => Promise<string>;
   writePatterns: (content: string) => Promise<void>;
+  readFacts: () => Promise<string>;
+  writeFacts: (content: string) => Promise<void>;
   readProjectJournal: (projectPath: string) => Promise<string>;
   readProjectContext: (projectPath: string) => Promise<string>;
   synthesizePatterns: () => Promise<void>;
@@ -338,6 +343,12 @@ export const useApp = create<AppState>((set, get) => ({
     await invoke("extract_skill", { projectPath });
   },
 
+  runAutopilotNow: async (projectPath) => {
+    const ok = await invoke<boolean>("run_autopilot_now", { projectPath });
+    await get().refreshProjects();
+    return ok;
+  },
+
   setSchedule: async (projectPath, patch) => {
     const meta = await invoke<ProjectMeta>("set_project_schedule", {
       projectPath,
@@ -367,6 +378,8 @@ export const useApp = create<AppState>((set, get) => ({
   writeProfile: (content) => invoke("write_profile", { content }),
   readPatterns: () => invoke<string>("read_patterns"),
   writePatterns: (content) => invoke("write_patterns", { content }),
+  readFacts: () => invoke<string>("read_facts"),
+  writeFacts: (content) => invoke("write_facts", { content }),
   readProjectJournal: (projectPath) =>
     invoke<string>("read_project_journal", { projectPath }),
   readProjectContext: (projectPath) =>

@@ -1,10 +1,13 @@
+mod autopilot;
 mod config;
 mod memory;
 mod project;
 mod schedule;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 use config::AppConfig;
 use project::{
@@ -12,6 +15,7 @@ use project::{
 };
 use serde::Deserialize;
 use tauri::Emitter;
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -161,6 +165,16 @@ fn write_patterns(content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn read_facts() -> Result<String, String> {
+    memory::read_global("facts.md")
+}
+
+#[tauri::command]
+fn write_facts(content: String) -> Result<(), String> {
+    memory::write_global("facts.md", &content)
+}
+
+#[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
 }
@@ -225,7 +239,7 @@ fn synthesize_patterns(app: tauri::AppHandle) -> Result<(), String> {
          3. 用 Read 读取 {patterns_str}(可能为空),再用 Edit 或 Write 工具增量更新它,保留仍然有效的旧条目\n\
          4. 一次性决策、单次事件不要写进去\n\
          5. 输出 markdown 列表风格,简短直接\n\
-         6. 完成后用 Bash 工具执行 `rm {temp_str}` 删除临时文件"
+         6. 完成后用 Bash 工具删除临时文件 {temp_str}"
     );
 
     let kind = read_terminal_kind(&cfg.workspace);
@@ -352,7 +366,93 @@ fn continue_with_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<
     run_in_terminal(&kind, &project_path, Some("claude -c"))
 }
 
-fn build_handoff_prompt(project_path: &Path) -> String {
+fn first_non_empty_line(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let t = line.trim();
+        if !t.is_empty() && !t.starts_with('#') {
+            return Some(t.to_string());
+        }
+    }
+    None
+}
+
+fn first_paragraph(text: &str) -> Option<String> {
+    let mut buf = String::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if t.is_empty() {
+            if !buf.is_empty() {
+                break;
+            }
+            continue;
+        }
+        if t.starts_with('#') {
+            continue;
+        }
+        if !buf.is_empty() {
+            buf.push(' ');
+        }
+        buf.push_str(t);
+    }
+    if buf.is_empty() {
+        None
+    } else {
+        Some(buf)
+    }
+}
+
+fn summarize_sibling(project_path: &Path) -> Option<(String, String)> {
+    let meta = project::read_meta(project_path).ok()?;
+    let context = memory::read_project(project_path, "context.md").unwrap_or_default();
+    if let Some(s) = first_paragraph(&context) {
+        return Some((meta.name, s));
+    }
+    let readme = project::read_readme(project_path).unwrap_or_default();
+    if let Some(s) = first_non_empty_line(&readme) {
+        return Some((meta.name, s));
+    }
+    Some((meta.name.clone(), meta.name))
+}
+
+fn build_sibling_index(project_path: &Path) -> String {
+    let Some(parent) = project_path.parent() else {
+        return String::new();
+    };
+    let Some(workspace) = parent.parent() else {
+        return String::new();
+    };
+    let mut entries: Vec<(String, String, std::path::PathBuf)> = Vec::new();
+    for sub in ["projects", "archive"] {
+        let dir = workspace.join(sub);
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read.flatten() {
+            let p = entry.path();
+            if !p.is_dir() || p == project_path {
+                continue;
+            }
+            if let Some((name, summary)) = summarize_sibling(&p) {
+                entries.push((name, summary, p));
+            }
+        }
+    }
+    if entries.is_empty() {
+        return String::new();
+    }
+    entries.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    let mut lines = vec!["## 兄弟项目索引".to_string()];
+    lines.push("当用户提到\"另一个任务里说过的事\"或暗示跨项目知识时,先在以下索引中扫一眼,必要时用 Read 工具读取对应项目的 context.md / README.md 获取细节:".to_string());
+    for (name, summary, path) in entries.iter().take(40) {
+        let trimmed: String = summary.chars().take(80).collect();
+        lines.push(format!("- {} ({}): {}", name, path.display(), trimmed));
+    }
+    lines.join("\n")
+}
+
+/// 拼装注入给 Claude 的上下文段落（项目资料 + 全局记忆 + 兄弟索引 + 本项目进展/日志）。
+/// 交接与 autopilot 两种 prompt 共用这部分，区别只在尾部任务指令。
+fn build_context_sections(project_path: &Path) -> Vec<String> {
     let abs = project_path.display().to_string();
     let refs = project::list_references(project_path).unwrap_or_default();
     let refs_section = if refs.is_empty() {
@@ -372,8 +472,10 @@ fn build_handoff_prompt(project_path: &Path) -> String {
 
     let profile = memory::read_global("profile.md").unwrap_or_default();
     let patterns = memory::read_global("patterns.md").unwrap_or_default();
+    let facts = memory::read_global("facts.md").unwrap_or_default();
     let context = memory::read_project(project_path, "context.md").unwrap_or_default();
     let journal_tail = memory::tail_journal(project_path, 5).unwrap_or_default();
+    let sibling_index = build_sibling_index(project_path);
 
     let mut sections: Vec<String> = vec![refs_section];
 
@@ -383,11 +485,20 @@ fn build_handoff_prompt(project_path: &Path) -> String {
             profile.trim()
         ));
     }
+    if !facts.trim().is_empty() {
+        sections.push(format!(
+            "## 用户世界事实（来自 ~/.dazi/facts.md）\n这里记录用户长期持有的实体与基础设施（服务器、设备、协作者、账号、关键链接等）。被问到\"我那台服务器/那个设备/那个人是谁\"时,先查这里:\n{}",
+            facts.trim()
+        ));
+    }
     if !patterns.trim().is_empty() {
         sections.push(format!(
             "## 跨项目模式（来自 ~/.dazi/patterns.md）\n{}",
             patterns.trim()
         ));
+    }
+    if !sibling_index.trim().is_empty() {
+        sections.push(sibling_index);
     }
     if !context.trim().is_empty() {
         sections.push(format!(
@@ -402,18 +513,49 @@ fn build_handoff_prompt(project_path: &Path) -> String {
         ));
     }
 
-    sections.push(format!(
-        "## 任务\n先用一段话总结你对本项目的理解，再提出 3 个最有价值的下一步。\n\n\
-         ## 记忆回写约定（重要）\n会话结束前请按以下规则维护记忆，仅写下列文件，不要改动 meta.yml/README.md/references：\n\
-         1. 若本次出现新的、关于「用户偏好/工作风格」的稳定观察，使用 Edit 工具增量更新 「~/.dazi/profile.md」（不要全量重写；没有新观察就不动）。\n\
-         2. 使用 Write 工具覆写 「{abs}/.dazi/context.md」，反映本项目当前最新进展（一句话目标 + 进行中 + 下一步 + 已完成要点）。\n\
-         3. 使用 Edit 工具在 「{abs}/.dazi/journal.md」 末尾追加一段，格式：\n\
+    sections
+}
+
+/// 记忆回写约定（交接与 autopilot 共用，{abs} 为项目根目录）。
+fn writeback_convention(abs: &str) -> String {
+    format!(
+        "## 记忆回写约定（重要）\n会话结束前按以下「分诊器」决定每条新信息写到哪个文件，仅写下列文件，不要改动 meta.yml/README.md/references：\n\
+         - 用户长期持有的「实体」(服务器、设备、SSH/账号、协作者、关键链接、硬件) → Edit 「~/.dazi/facts.md」 增量补充；用户说「记住」「以后这台机器叫…」时一律写这里。\n\
+         - 用户的「偏好/工作风格」稳定观察(沟通方式、技术口味、不喜欢什么) → Edit 「~/.dazi/profile.md」 增量补充。\n\
+         - 跨项目反复出现的「做事模式」(至少出现 2 次的协作纠正/打法) → 由复盘流程统一归纳到 「~/.dazi/patterns.md」，**单次会话不要主动改它**。\n\
+         - 本项目「当前进展快照」 → Write 覆写 「{abs}/.dazi/context.md」(一句话目标 + 进行中 + 下一步 + 已完成要点)。\n\
+         - 本项目「这次会话讨论/决定/待办」流水 → Edit 在 「{abs}/.dazi/journal.md」 末尾追加：\n\
          ## YYYY-MM-DD HH:MM\n\
          - 讨论了 …\n\
          - 决定 …\n\
-         - 待办 …"
-    ));
+         - 待办 …\n\n\
+         判断要点：信息「跟着用户走」(下个项目还要用) 写 facts/profile；信息「跟着这个项目走」写 context/journal。拿不准时优先写 facts，宁可全局也别困在某个项目里。"
+    )
+}
 
+fn build_handoff_prompt(project_path: &Path) -> String {
+    let abs = project_path.display().to_string();
+    let mut sections = build_context_sections(project_path);
+    sections.push(
+        "## 任务\n先用一段话总结你对本项目的理解，再提出 3 个最有价值的下一步。".to_string(),
+    );
+    sections.push(writeback_convention(&abs));
+    sections.join("\n\n")
+}
+
+/// 无人值守自动执行用的 prompt：自主把任务推进到可交付状态，破坏性/不确定操作只记录待确认。
+fn build_autopilot_prompt(project_path: &Path) -> String {
+    let abs = project_path.display().to_string();
+    let mut sections = build_context_sections(project_path);
+    sections.push(
+        "## 任务（自动执行模式）\n你正在**无人值守**地自动执行本项目的既定任务，没有用户实时盯着，运行结束后用户才会看到结果。请：\n\
+         1. 依据 README.md 与上面的上下文，判断本项目此刻最该推进的既定任务，并把它**实际推进到一个可交付/可检查的状态**（该写文件就写、该跑命令就跑）。\n\
+         2. **破坏性或不可逆操作**（删除、覆盖重要文件、对外发送、安装/卸载、动 git 历史、改系统配置）以及**你拿不准是否符合用户意图**的决策：不要擅自执行，改为在 journal 里记下「待用户确认」并说明原因。\n\
+         3. 只在本项目目录范围内操作，不要去动其它项目。\n\
+         4. 最后用 2-4 句话总结：这次做了什么、产出在哪、有没有需要用户确认或接手的事项。这段总结就是你这次运行的结果。"
+            .to_string(),
+    );
+    sections.push(writeback_convention(&abs));
     sections.join("\n\n")
 }
 
@@ -454,12 +596,93 @@ fn run_in_terminal(kind: &str, path: &Path, extra_cmd: Option<&str>) -> Result<(
             "tell application \"Terminal\"\n  activate\n  do script \"{inner}\"\n  delay 0.1\n  set custom title of front window to \"{escaped_title}\"\nend tell"
         )
     };
-    Command::new("osascript")
+    let output = Command::new("osascript")
         .arg("-e")
         .arg(&script)
-        .status()
+        .output()
         .map_err(|e| format!("osascript 启动失败: {e}\n--- script ---\n{script}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "osascript 执行失败 (exit {:?}): {}\n--- script ---\n{script}",
+            output.status.code(),
+            stderr.trim()
+        ));
+    }
     Ok(())
+}
+
+/// 执行一次 autopilot：跑 headless claude → 写 journal → 记录 run → 通知 → 发事件。
+/// 在独立线程中调用，不阻塞 tick loop。`name` 用于通知标题。
+fn execute_autopilot(
+    app: &tauri::AppHandle,
+    project_path: &Path,
+    name: &str,
+    model: Option<String>,
+) {
+    let prompt = build_autopilot_prompt(project_path);
+    let (ok, message) = match autopilot::run_autopilot(project_path, &prompt, model.as_deref()) {
+        Ok(outcome) => {
+            let _ = autopilot::append_autopilot_journal(project_path, &outcome);
+            let msg = match &outcome.session_id {
+                Some(sid) => format!("{}\n[session: {sid}]", outcome.summary),
+                None => outcome.summary.clone(),
+            };
+            (outcome.ok, msg)
+        }
+        Err(e) => {
+            // 运行框架本身失败（启动/超时）也落一条 journal，方便排查。
+            let outcome = autopilot::RunOutcome {
+                ok: false,
+                summary: e.clone(),
+                session_id: None,
+            };
+            let _ = autopilot::append_autopilot_journal(project_path, &outcome);
+            (false, e)
+        }
+    };
+
+    let _ = schedule::record_run(project_path, "autopilot", ok, Some(message.clone()));
+
+    let title = if ok {
+        format!("Dazi · {name} 自动执行完成")
+    } else {
+        format!("Dazi · {name} 自动执行失败")
+    };
+    let body: String = message.chars().take(180).collect();
+    let _ = app.notification().builder().title(&title).body(&body).show();
+    let _ = app.emit("task-completed", serde_json::json!({
+        "path": project_path.to_string_lossy(),
+        "name": name,
+        "ok": ok,
+    }));
+}
+
+/// 手动立即触发一次 autopilot（UI「立即执行一次」按钮 / 验证用）。同步执行后返回成败。
+#[tauri::command]
+fn run_autopilot_now(app: tauri::AppHandle, project_path: PathBuf) -> Result<bool, String> {
+    let name = project_path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".to_string());
+    let model = project::read_meta(&project_path)
+        .ok()
+        .and_then(|m| m.on_trigger)
+        .and_then(|t| t.model);
+    let prompt = build_autopilot_prompt(&project_path);
+    let outcome = autopilot::run_autopilot(&project_path, &prompt, model.as_deref())?;
+    let _ = autopilot::append_autopilot_journal(&project_path, &outcome);
+    let msg = match &outcome.session_id {
+        Some(sid) => format!("{}\n[session: {sid}]", outcome.summary),
+        None => outcome.summary.clone(),
+    };
+    let _ = schedule::record_run(&project_path, "autopilot", outcome.ok, Some(msg));
+    let _ = app.emit("task-completed", serde_json::json!({
+        "path": project_path.to_string_lossy(),
+        "name": name,
+        "ok": outcome.ok,
+    }));
+    Ok(outcome.ok)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -469,9 +692,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             let handle = app.handle().clone();
+            // 正在运行中的 autopilot 任务路径，防止 60s tick 在上一次还没跑完时重复触发。
+            let in_flight: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
             // 启动时补算 next_run_at + 周期 tick（独立线程，每 60s 扫描一次）
             std::thread::spawn(move || {
                 if let Ok(cfg) = config::load(&handle) {
@@ -489,8 +715,29 @@ pub fn run() {
                     };
                     let due = schedule::scan_due(&ws, chrono::Utc::now());
                     for d in due {
-                        let _ = schedule::record_run(&d.path, &d.action, true, None);
-                        let _ = handle.emit("task-triggered", &d);
+                        if d.action == "autopilot" {
+                            // 已在运行的跳过；否则标记 in-flight 并起线程执行。
+                            {
+                                let mut set = in_flight.lock().unwrap();
+                                if set.contains(&d.path) {
+                                    continue;
+                                }
+                                set.insert(d.path.clone());
+                            }
+                            let h = handle.clone();
+                            let flight = in_flight.clone();
+                            let path = d.path.clone();
+                            let name = d.name.clone();
+                            let model = d.model.clone();
+                            std::thread::spawn(move || {
+                                execute_autopilot(&h, &path, &name, model);
+                                flight.lock().unwrap().remove(&path);
+                            });
+                        } else {
+                            // notify（及其它）：保持原行为，仅记录触发 + 发事件。
+                            let _ = schedule::record_run(&d.path, &d.action, true, None);
+                            let _ = handle.emit("task-triggered", &d);
+                        }
                     }
                 }
             });
@@ -522,11 +769,14 @@ pub fn run() {
             write_profile,
             read_patterns,
             write_patterns,
+            read_facts,
+            write_facts,
             read_project_journal,
             read_project_context,
             synthesize_patterns,
             unarchive_project,
             extract_skill,
+            run_autopilot_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
