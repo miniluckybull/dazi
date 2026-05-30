@@ -1,5 +1,6 @@
 // autopilot.rs — 无人值守 headless 运行 claude，把到期任务自动推进并回收结果。
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -104,6 +105,20 @@ fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// 杀掉整个进程组（pgid 为 zsh 组长的 pid）：先 TERM 给清理机会，再 KILL 兜底。
+/// `kill -<n> -<pgid>` 的负号表示把信号发给整个进程组。
+fn kill_group(pgid: u32) {
+    let _ = Command::new("kill")
+        .arg("-TERM")
+        .arg(format!("-{pgid}"))
+        .status();
+    std::thread::sleep(Duration::from_millis(500));
+    let _ = Command::new("kill")
+        .arg("-KILL")
+        .arg(format!("-{pgid}"))
+        .status();
+}
+
 /// headless 运行 claude 执行 autopilot prompt。工作目录设为项目根，
 /// 通过登录 shell 拿到用户 PATH，带硬超时，解析 JSON 结果。
 pub fn run_autopilot(
@@ -132,6 +147,9 @@ pub fn run_autopilot(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        // 让 zsh 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
+        // 避免只杀 zsh 而 claude 子进程变孤儿继续在后台改文件。
+        .process_group(0)
         .spawn()
         .map_err(|e| format!("启动 claude 失败: {e}"))?;
 
@@ -154,13 +172,15 @@ pub fn run_autopilot(
     });
 
     // 轮询 try_wait 实现硬超时，保持对 child 的所有权以便超时时 kill。
+    // pgid == zsh 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
+    let pgid = child.id();
     let start = std::time::Instant::now();
     let timed_out = loop {
         match child.try_wait() {
             Ok(Some(_status)) => break false,
             Ok(None) => {
                 if start.elapsed() >= Duration::from_secs(TIMEOUT_SECS) {
-                    let _ = child.kill();
+                    kill_group(pgid);
                     let _ = child.wait();
                     break true;
                 }
