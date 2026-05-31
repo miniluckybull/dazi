@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["crates/dazi-core"]
+members = ["crates/dazi-core", "crates/dazi-daemon"]
 exclude = ["src-tauri"]
