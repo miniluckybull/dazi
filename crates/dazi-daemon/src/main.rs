@@ -28,8 +28,10 @@ async fn main() {
     let auth = Arc::new(Auth::new());
     let state = AppState { auth: auth.clone() };
 
-    // 公开端点：健康检查与配对（配对靠 PIN，不需要 token）。
+    // 公开端点：Web 页静态资源、健康检查与配对（配对靠 PIN，不需要 token）。
     let public = Router::new()
+        .route("/", get(http::index))
+        .route("/app.js", get(http::app_js))
         .route("/health", get(http::health))
         .route("/api/v1/pair", post(http::pair));
 

@@ -2,6 +2,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    response::IntoResponse,
     Json,
 };
 use dazi_core::{config, memory, project, schedule};
@@ -47,6 +48,20 @@ fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json<ErrBody>)>
 
 pub async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true, "service": "dazi-daemon" }))
+}
+
+/// 手机只读 Web 页：编译进二进制，无需额外部署静态目录。
+pub async fn index() -> axum::response::Html<&'static str> {
+    axum::response::Html(include_str!("../static/index.html"))
+}
+
+pub async fn app_js() -> axum::response::Response {
+    use axum::http::header;
+    (
+        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../static/app.js"),
+    )
+        .into_response()
 }
 
 pub async fn get_config() -> ApiResult<config::AppConfig> {
