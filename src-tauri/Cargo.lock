@@ -789,6 +789,7 @@ name = "dazi"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dazi-core",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -800,6 +801,16 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "tauri-plugin-sql",
+]
+
+[[package]]
+name = "dazi-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "serde_yaml",
  "trash",
 ]
 

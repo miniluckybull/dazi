@@ -1,8 +1,6 @@
-mod autopilot;
 mod config;
-mod memory;
-mod project;
-mod schedule;
+
+use dazi_core::{autopilot, memory, project, schedule};
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -19,12 +17,12 @@ use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
-fn get_config(app: tauri::AppHandle) -> Result<AppConfig, String> {
-    config::load(&app)
+fn get_config() -> Result<AppConfig, String> {
+    config::load()
 }
 
 #[tauri::command]
-fn set_workspace(app: tauri::AppHandle, path: PathBuf) -> Result<AppConfig, String> {
+fn set_workspace(path: PathBuf) -> Result<AppConfig, String> {
     if !path.exists() {
         return Err(format!("路径不存在: {}", path.display()));
     }
@@ -35,7 +33,7 @@ fn set_workspace(app: tauri::AppHandle, path: PathBuf) -> Result<AppConfig, Stri
     let cfg = AppConfig {
         workspace: Some(path),
     };
-    config::save(&app, &cfg)?;
+    config::save(&cfg)?;
     Ok(cfg)
 }
 
@@ -185,8 +183,8 @@ fn read_project_context(project_path: PathBuf) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn synthesize_patterns(app: tauri::AppHandle) -> Result<(), String> {
-    let cfg = config::load(&app)?;
+fn synthesize_patterns(_app: tauri::AppHandle) -> Result<(), String> {
+    let cfg = config::load()?;
     let workspace = cfg
         .workspace
         .clone()
@@ -249,11 +247,11 @@ fn synthesize_patterns(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn extract_skill(app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
+fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
     if !project_path.exists() {
         return Err(format!("项目不存在: {}", project_path.display()));
     }
-    let cfg = config::load(&app)?;
+    let cfg = config::load()?;
     let meta = project::read_meta(&project_path)?;
     let readme = project::read_readme(&project_path).unwrap_or_default();
     let context = memory::read_project(&project_path, "context.md").unwrap_or_default();
@@ -334,21 +332,21 @@ fn escape_applescript(s: &str) -> String {
 }
 
 #[tauri::command]
-fn open_terminal(app: tauri::AppHandle, path: PathBuf) -> Result<(), String> {
+fn open_terminal(_app: tauri::AppHandle, path: PathBuf) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("路径不存在: {}", path.display()));
     }
-    let cfg = config::load(&app)?;
+    let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
     run_in_terminal(&kind, &path, None)
 }
 
 #[tauri::command]
-fn hand_off_to_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<ProjectMeta, String> {
+fn hand_off_to_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<ProjectMeta, String> {
     if !project_path.exists() {
         return Err(format!("项目不存在: {}", project_path.display()));
     }
-    let cfg = config::load(&app)?;
+    let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
     let prompt = build_handoff_prompt(&project_path);
     let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
@@ -357,11 +355,11 @@ fn hand_off_to_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<Pr
 }
 
 #[tauri::command]
-fn continue_with_claude(app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
+fn continue_with_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
     if !project_path.exists() {
         return Err(format!("项目不存在: {}", project_path.display()));
     }
-    let cfg = config::load(&app)?;
+    let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
     run_in_terminal(&kind, &project_path, Some("claude -c"))
 }
@@ -695,19 +693,22 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
+            // 升级迁移：把旧版 Tauri 配置目录下的 config.json 迁到 ~/.dazi/config.json，
+            // 保证已设置 workspace 的老用户升级后不丢失配置。
+            config::migrate_legacy_config(app.handle());
             let handle = app.handle().clone();
             // 正在运行中的 autopilot 任务路径，防止 60s tick 在上一次还没跑完时重复触发。
             let in_flight: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
             // 启动时补算 next_run_at + 周期 tick（独立线程，每 60s 扫描一次）
             std::thread::spawn(move || {
-                if let Ok(cfg) = config::load(&handle) {
+                if let Ok(cfg) = config::load() {
                     if let Some(ws) = cfg.workspace.clone() {
                         schedule::refresh_all(&ws);
                     }
                 }
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(60));
-                    let Ok(cfg) = config::load(&handle) else {
+                    let Ok(cfg) = config::load() else {
                         continue;
                     };
                     let Some(ws) = cfg.workspace.clone() else {
