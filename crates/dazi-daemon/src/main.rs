@@ -63,7 +63,10 @@ async fn main() {
         .route("/api/v1/projects/:slug/journal", get(http::get_journal))
         .route("/api/v1/projects/:slug/context", get(http::get_context))
         .route("/api/v1/projects/:slug/schedule", put(http_write::put_schedule))
-        .route("/api/v1/memory/:name", put(http_write::put_memory))
+        .route(
+            "/api/v1/memory/:name",
+            get(http::get_memory).put(http_write::put_memory),
+        )
         .route("/api/v1/due", get(http::get_due))
         .route(
             "/api/v1/projects/:slug/plan",

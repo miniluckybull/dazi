@@ -115,6 +115,18 @@ pub async fn get_due() -> ApiResult<Vec<schedule::DueProject>> {
     Ok(Json(schedule::scan_due(&ws, chrono::Utc::now())))
 }
 
+/// 读全局记忆：name 限 profile/facts/patterns，防路径穿越。
+pub async fn get_memory(Path(name): Path<String>) -> ApiResult<TextBody> {
+    let file = match name.as_str() {
+        "profile" => "profile.md",
+        "facts" => "facts.md",
+        "patterns" => "patterns.md",
+        _ => return Err(err(StatusCode::BAD_REQUEST, "记忆名只能是 profile/facts/patterns")),
+    };
+    let content = memory::read_global(file).unwrap_or_default();
+    Ok(Json(TextBody { content }))
+}
+
 #[derive(serde::Deserialize)]
 pub struct PairReq {
     pub pin: String,
