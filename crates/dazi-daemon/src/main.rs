@@ -3,6 +3,7 @@
 mod auth;
 mod http;
 mod http_write;
+mod ws;
 
 use axum::{
     extract::State,
@@ -27,14 +28,19 @@ async fn main() {
         .init();
 
     let auth = Arc::new(Auth::new());
-    let state = AppState { auth: auth.clone() };
+    let state = AppState {
+        auth: auth.clone(),
+        events: ws::WsSink::new(),
+    };
 
     // 公开端点：Web 页静态资源、健康检查与配对（配对靠 PIN，不需要 token）。
+    // WebSocket 事件流也在此：浏览器无法设 header，token 走查询参数，在 handler 内校验。
     let public = Router::new()
         .route("/", get(http::index))
         .route("/app.js", get(http::app_js))
         .route("/health", get(http::health))
-        .route("/api/v1/pair", post(http::pair));
+        .route("/api/v1/pair", post(http::pair))
+        .route("/api/v1/events", get(ws::ws_handler));
 
     // 受保护端点：需 Bearer device_token。
     let protected = Router::new()

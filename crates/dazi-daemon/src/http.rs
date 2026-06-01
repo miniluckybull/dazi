@@ -15,6 +15,7 @@ use crate::auth::Auth;
 #[derive(Clone)]
 pub struct AppState {
     pub auth: Arc<Auth>,
+    pub events: crate::ws::WsSink,
 }
 
 /// 统一错误：把 dazi-core 的 String 错误映射为 500 + JSON。
