@@ -2,13 +2,14 @@
 //! 复用 dazi-core 的全部业务逻辑，监听局域网，供手机等瘦客户端访问。
 mod auth;
 mod http;
+mod http_write;
 
 use axum::{
     extract::State,
     http::{header, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 use std::sync::Arc;
@@ -38,11 +39,22 @@ async fn main() {
     // 受保护端点：需 Bearer device_token。
     let protected = Router::new()
         .route("/api/v1/config", get(http::get_config))
-        .route("/api/v1/projects", get(http::list_projects))
-        .route("/api/v1/projects/:slug", get(http::get_meta))
-        .route("/api/v1/projects/:slug/readme", get(http::get_readme))
+        .route(
+            "/api/v1/projects",
+            get(http::list_projects).post(http_write::create_project),
+        )
+        .route(
+            "/api/v1/projects/:slug",
+            get(http::get_meta).patch(http_write::patch_meta),
+        )
+        .route(
+            "/api/v1/projects/:slug/readme",
+            get(http::get_readme).put(http_write::put_readme),
+        )
         .route("/api/v1/projects/:slug/journal", get(http::get_journal))
         .route("/api/v1/projects/:slug/context", get(http::get_context))
+        .route("/api/v1/projects/:slug/schedule", put(http_write::put_schedule))
+        .route("/api/v1/memory/:name", put(http_write::put_memory))
         .route("/api/v1/due", get(http::get_due))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

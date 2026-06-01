@@ -9,9 +9,8 @@ use std::sync::{Arc, Mutex};
 
 use config::AppConfig;
 use project::{
-    MetaPatch, OnTrigger, ProjectInit, ProjectMeta, ProjectSummary, ReferenceEntry, Schedule,
+    MetaPatch, ProjectInit, ProjectMeta, ProjectSummary, ReferenceEntry,
 };
-use serde::Deserialize;
 use tauri::Emitter;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
@@ -104,27 +103,12 @@ fn unarchive_project(workspace: PathBuf, project_path: PathBuf) -> Result<PathBu
     project::unarchive_project(&workspace, &project_path)
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SchedulePatch {
-    pub task_type: String,
-    #[serde(default)]
-    pub schedule: Option<Schedule>,
-    #[serde(default)]
-    pub on_trigger: Option<OnTrigger>,
-}
-
 #[tauri::command]
 fn set_project_schedule(
     project_path: PathBuf,
-    patch: SchedulePatch,
+    patch: schedule::SchedulePatch,
 ) -> Result<ProjectMeta, String> {
-    let mut meta = project::read_meta(&project_path)?;
-    meta.task_type = patch.task_type;
-    meta.schedule = patch.schedule;
-    meta.on_trigger = patch.on_trigger;
-    meta.updated_at = chrono::Utc::now();
-    project::write_meta(&project_path, &meta)?;
-    schedule::recompute_and_save(&project_path)
+    schedule::apply_schedule_patch(&project_path, patch)
 }
 
 #[tauri::command]

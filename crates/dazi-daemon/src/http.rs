@@ -25,7 +25,7 @@ pub struct ErrBody {
     pub error: String,
 }
 
-fn err(code: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<ErrBody>) {
+pub(crate) fn err(code: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<ErrBody>) {
     (code, Json(ErrBody { error: msg.into() }))
 }
 
@@ -84,7 +84,7 @@ pub async fn get_meta(Path(slug): Path<String>) -> ApiResult<project::ProjectMet
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, serde::Deserialize)]
 pub struct TextBody {
     pub content: String,
 }
