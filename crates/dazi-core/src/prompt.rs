@@ -182,6 +182,21 @@ pub fn build_handoff_prompt(project_path: &Path) -> String {
     sections.join("\n\n")
 }
 
+/// 手机审批用的「计划」prompt：plan 模式下让 claude 只产出将要执行的计划，
+/// 供用户在手机上批准后再真正执行（配合 autopilot::run_plan）。
+pub fn build_plan_prompt(project_path: &Path) -> String {
+    let mut sections = build_context_sections(project_path);
+    sections.push(
+        "## 任务（计划模式 / 待人工审批）\n你正在为本项目的既定任务**制定执行计划**，稍后会推送到用户手机等待批准，批准后才会真正执行。请：\n\
+         1. 依据 README.md 与上面的上下文，判断此刻最该推进的既定任务。\n\
+         2. 用清晰的条目列出你**打算执行的具体步骤**（要改哪些文件、跑什么命令、产出什么），让用户一眼能判断是否放心批准。\n\
+         3. 明确标注其中任何**破坏性或不可逆**的操作（删除、覆盖、对外发送、装卸依赖、动 git 历史等）。\n\
+         4. 不要现在就执行——只输出计划。这段计划就是你这次的结果。"
+            .to_string(),
+    );
+    sections.join("\n\n")
+}
+
 /// 无人值守自动执行用的 prompt：自主把任务推进到可交付状态，破坏性/不确定操作只记录待确认。
 pub fn build_autopilot_prompt(project_path: &Path) -> String {
     let abs = project_path.display().to_string();

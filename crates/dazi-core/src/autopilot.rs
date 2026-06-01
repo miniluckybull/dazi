@@ -119,19 +119,41 @@ fn kill_group(pgid: u32) {
         .status();
 }
 
-/// headless 运行 claude 执行 autopilot prompt。工作目录设为项目根，
-/// 通过登录 shell 拿到用户 PATH，带硬超时，解析 JSON 结果。
+/// headless 运行 claude 执行 autopilot prompt（bypassPermissions，真正改文件/跑命令）。
 pub fn run_autopilot(
     project_path: &Path,
     prompt: &str,
     model: Option<&str>,
 ) -> Result<RunOutcome, String> {
+    run_claude(project_path, prompt, model, "bypassPermissions")
+}
+
+/// plan 模式跑 claude：只产出计划、不执行任何写操作或命令（由 claude CLI 强制保证）。
+/// 用于手机审批的 dry-run 阶段——把计划推给用户批准后，再 run_autopilot 真正执行。
+pub fn run_plan(
+    project_path: &Path,
+    prompt: &str,
+    model: Option<&str>,
+) -> Result<RunOutcome, String> {
+    run_claude(project_path, prompt, model, "plan")
+}
+
+/// headless 运行 claude 的核心实现。工作目录设为项目根，
+/// 通过登录 shell 拿到用户 PATH，带硬超时，解析 JSON 结果。
+/// permission_mode：plan（只产计划）/ bypassPermissions（无人值守执行）。
+fn run_claude(
+    project_path: &Path,
+    prompt: &str,
+    model: Option<&str>,
+    permission_mode: &str,
+) -> Result<RunOutcome, String> {
     let bin = resolve_claude_bin();
-    // 拼 claude 命令：-p 非交互 + json 输出 + 跳过权限（无人值守无 TTY 批准）。
+    // 拼 claude 命令：-p 非交互 + json 输出 + 指定权限模式。
     let mut inner = format!(
-        "{} -p {} --output-format json --permission-mode bypassPermissions",
+        "{} -p {} --output-format json --permission-mode {}",
         shell_single_quote(&bin),
-        shell_single_quote(prompt)
+        shell_single_quote(prompt),
+        permission_mode
     );
     if let Some(m) = model {
         if !m.trim().is_empty() {

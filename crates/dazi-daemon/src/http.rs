@@ -16,6 +16,7 @@ use crate::auth::Auth;
 pub struct AppState {
     pub auth: Arc<Auth>,
     pub events: crate::ws::WsSink,
+    pub approvals: Arc<crate::approval::ApprovalStore>,
 }
 
 /// 统一错误：把 dazi-core 的 String 错误映射为 500 + JSON。
@@ -30,14 +31,14 @@ pub(crate) fn err(code: StatusCode, msg: impl Into<String>) -> (StatusCode, Json
     (code, Json(ErrBody { error: msg.into() }))
 }
 
-fn workspace() -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
+pub(crate) fn workspace() -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
     let cfg = config::load().map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     cfg.workspace
         .ok_or_else(|| err(StatusCode::CONFLICT, "尚未设置工作区"))
 }
 
 /// 在活动 + 归档项目里按 slug 找项目目录。
-fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
+pub(crate) fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
     let ws = workspace()?;
     let mut all = project::list_projects(&ws).unwrap_or_default();
     all.extend(project::list_archived(&ws).unwrap_or_default());

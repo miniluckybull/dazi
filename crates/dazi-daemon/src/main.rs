@@ -1,7 +1,9 @@
 //! dazi-daemon — Dazi 的常驻大脑（M1：只读 API + 配对鉴权）。
 //! 复用 dazi-core 的全部业务逻辑，监听局域网，供手机等瘦客户端访问。
+mod approval;
 mod auth;
 mod http;
+mod http_approval;
 mod http_write;
 mod ws;
 
@@ -31,6 +33,7 @@ async fn main() {
     let state = AppState {
         auth: auth.clone(),
         events: ws::WsSink::new(),
+        approvals: Arc::new(approval::ApprovalStore::new()),
     };
 
     // 公开端点：Web 页静态资源、健康检查与配对（配对靠 PIN，不需要 token）。
@@ -62,6 +65,15 @@ async fn main() {
         .route("/api/v1/projects/:slug/schedule", put(http_write::put_schedule))
         .route("/api/v1/memory/:name", put(http_write::put_memory))
         .route("/api/v1/due", get(http::get_due))
+        .route(
+            "/api/v1/projects/:slug/plan",
+            post(http_approval::create_plan),
+        )
+        .route("/api/v1/approvals", get(http_approval::list_approvals))
+        .route(
+            "/api/v1/projects/:slug/approvals/:id",
+            post(http_approval::resolve_approval),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let app = Router::new()
