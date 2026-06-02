@@ -98,6 +98,24 @@
     font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.3s; max-width: 90vw;
   }
   .banner.show { transform: translateX(-50%) translateY(0); }
+  .seg { display: flex; gap: 6px; margin-bottom: 14px; }
+  .seg.sm { margin-bottom: 8px; }
+  .seg button {
+    flex: 1; padding: 10px; font-size: 14px; cursor: pointer;
+    background: #fff; color: #1c1c1e; border: 1px solid #e0e0e5; border-radius: 8px;
+  }
+  .seg button.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .inline { display: inline-flex; gap: 6px; align-items: center; }
+  .inline input, .inline select, .fld select {
+    padding: 9px; border: 1px solid #d0d0d5; border-radius: 8px; font-size: 15px;
+  }
+  .risk { font-size: 13px; color: #8e6d00; background: #fff8e1; padding: 10px; border-radius: 8px; }
+  .hidden { display: none; }
+  .detail-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .detail-actions button {
+    width: 100%; padding: 12px; font-size: 14px; border-radius: 8px; cursor: pointer;
+  }
+  .detail-actions #sched { background: #fff; color: #1c1c1e; border: 1px solid #e0e0e5; }
 </style>
 </head>
 <body>

@@ -218,16 +218,18 @@ async function renderDetail(slug) {
     const load = async () => {
       const planBtn = meta.task_type !== "oneoff"
         ? `<button id="plan" class="btn-primary">发起自动执行（先出计划待批）</button>` : "";
+      const schedBtn = `<button id="sched">调度设置（${typeLabel(meta.task_type)}）</button>`;
       m.innerHTML = `<div class="tabs">
         <button data-t="readme" class="${tab === "readme" ? "active" : ""}">README</button>
         <button data-t="journal" class="${tab === "journal" ? "active" : ""}">日志</button>
         <button data-t="context" class="${tab === "context" ? "active" : ""}">上下文</button>
-      </div><div id="tabbody"></div><div class="detail-actions">${planBtn}</div>`;
+      </div><div id="tabbody"></div><div class="detail-actions">${planBtn}${schedBtn}</div>`;
       m.querySelectorAll(".tabs button").forEach((b) => {
         b.onclick = () => { tab = b.dataset.t; load(); };
       });
       const pb = document.getElementById("plan");
       if (pb) pb.onclick = () => startPlan(slug);
+      document.getElementById("sched").onclick = () => renderSchedule(slug);
       const tb = document.getElementById("tabbody");
       const data = await api("/projects/" + encodeURIComponent(slug) + "/" + tab);
       if (tab === "readme") {
@@ -268,7 +270,7 @@ function renderNewTask() {
   app.innerHTML = header("新建任务", true) + `<main id="m">
     <label class="fld">任务名称<input id="nm" placeholder="例如：每日竞品摘要"></label>
     <div class="err" id="err"></div>
-    <button id="ok" class="btn-primary">创建</button></main>`;
+    <button id="ok" class="btn-primary">创建并设置调度</button></main>`;
   document.getElementById("back").onclick = renderList;
   document.getElementById("ok").onclick = async () => {
     const name = document.getElementById("nm").value.trim();
@@ -276,9 +278,123 @@ function renderNewTask() {
     try {
       const p = await apiSend("/projects", "POST", { name });
       banner("已创建");
-      renderDetail(p.slug);
+      renderSchedule(p.slug);
     } catch (e) { document.getElementById("err").textContent = e.message; }
   };
+}
+
+const UNIT_LABEL = { minute: "分钟", hour: "小时", day: "天", week: "周", month: "月" };
+
+// datetime-local 值 <-> ISO
+function isoToLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function localToIso(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+}
+
+// ---- 调度编辑（新建后 / 详情进入，复用同一界面）----
+async function renderSchedule(slug) {
+  currentView = () => renderSchedule(slug);
+  app.innerHTML = header("任务调度", true) + `<main id="m"><div class="empty">加载中…</div></main>`;
+  document.getElementById("back").onclick = () => renderDetail(slug);
+  bindRefresh(() => renderSchedule(slug));
+  const m = document.getElementById("m");
+  let meta;
+  try {
+    meta = await api("/projects/" + encodeURIComponent(slug));
+  } catch (e) { m.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  document.querySelector("header h1").textContent = meta.name + " · 调度";
+
+  const sc = meta.schedule || {};
+  const iv = sc.interval || { every: 1, unit: "day" };
+  const action = (meta.on_trigger && meta.on_trigger.action) || "notify";
+  let type = meta.task_type || "oneoff";
+
+  const render = () => {
+    const unitOpts = Object.keys(UNIT_LABEL)
+      .map((u) => `<option value="${u}" ${iv.unit === u ? "selected" : ""}>${UNIT_LABEL[u]}</option>`).join("");
+    m.innerHTML = `
+      <div class="seg">
+        ${["oneoff", "scheduled", "recurring"].map((t) =>
+          `<button data-type="${t}" class="${type === t ? "active" : ""}">${typeLabel(t)}</button>`).join("")}
+      </div>
+      <div id="schedFields"></div>
+      <div id="actionBox" class="${type === "oneoff" ? "hidden" : ""}">
+        <div class="sec-title">到点动作</div>
+        <div class="seg sm">
+          <button data-act="notify" class="${action === "notify" ? "active" : ""}">提醒我</button>
+          <button data-act="autopilot" class="${action === "autopilot" ? "active" : ""}">自动执行</button>
+        </div>
+        <div id="riskHint" class="${action === "autopilot" ? "" : "hidden"}">
+          <p class="risk">自动执行会让 Claude 在到点时按调度运行。在手机端，建议配合「先出计划待批」使用。</p>
+        </div>
+      </div>
+      <button id="saveS" class="btn-primary">保存调度</button><span id="st" class="st"></span>`;
+
+    const sf = document.getElementById("schedFields");
+    if (type === "scheduled") {
+      sf.innerHTML = `<label class="fld">触发时间<input type="datetime-local" id="runAt" value="${isoToLocal(sc.run_at)}"></label>`;
+    } else if (type === "recurring") {
+      sf.innerHTML = `
+        <label class="fld">首次时间（可选）<input type="datetime-local" id="runAt" value="${isoToLocal(sc.run_at)}"></label>
+        <label class="fld">每隔
+          <span class="inline"><input type="number" id="every" min="1" value="${iv.every || 1}" style="width:72px">
+          <select id="unit">${unitOpts}</select></span>
+        </label>`;
+    } else {
+      sf.innerHTML = `<p class="risk">一次性任务：做完即可归档，无需调度。</p>`;
+    }
+
+    m.querySelectorAll(".seg button[data-type]").forEach((b) => {
+      b.onclick = () => { type = b.dataset.type; render(); };
+    });
+    m.querySelectorAll(".seg button[data-act]").forEach((b) => {
+      b.onclick = () => { meta.on_trigger = { action: b.dataset.act }; render2(); };
+    });
+    function render2() {
+      // 仅切换 action 高亮，无需整体重渲染调度字段
+      const act = meta.on_trigger.action;
+      m.querySelectorAll(".seg button[data-act]").forEach((x) =>
+        x.classList.toggle("active", x.dataset.act === act));
+      document.getElementById("riskHint").classList.toggle("hidden", act !== "autopilot");
+    }
+    document.getElementById("saveS").onclick = () => saveSchedule(slug, type, meta);
+  };
+  render();
+}
+
+async function saveSchedule(slug, type, meta) {
+  const st = document.getElementById("st");
+  const act = (meta.on_trigger && meta.on_trigger.action) || "notify";
+  let schedule = null;
+  if (type === "scheduled") {
+    const runAt = localToIso(document.getElementById("runAt").value);
+    if (!runAt) { st.textContent = "请选择触发时间"; return; }
+    schedule = { run_at: runAt };
+  } else if (type === "recurring") {
+    const every = Math.max(1, parseInt(document.getElementById("every").value || "1", 10));
+    const unit = document.getElementById("unit").value;
+    const runAt = localToIso(document.getElementById("runAt").value);
+    schedule = { run_at: runAt, interval: { every, unit } };
+  }
+  const patch = {
+    task_type: type,
+    schedule,
+    on_trigger: { action: type === "oneoff" ? "notify" : act },
+  };
+  st.textContent = "保存中…";
+  try {
+    await apiSend("/projects/" + encodeURIComponent(slug) + "/schedule", "PUT", patch);
+    banner("调度已保存");
+    renderDetail(slug);
+  } catch (e) { st.textContent = "失败：" + e.message; }
 }
 
 // ---- 全局记忆编辑 ----
