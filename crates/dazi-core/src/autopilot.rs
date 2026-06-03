@@ -35,6 +35,28 @@ pub fn resolve_claude_bin() -> String {
     "claude".to_string()
 }
 
+/// claude 探活：跑 `claude --version`（快、不耗 token、不需登录态），
+/// 用于 daemon 启动自检。Ok(版本串) / Err(原因)。
+pub fn probe_claude() -> Result<String, String> {
+    let bin = resolve_claude_bin();
+    let inner = format!("{} --version", shell_single_quote(&bin));
+    let out = Command::new("zsh")
+        .arg("-lc")
+        .arg(&inner)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("无法启动 claude: {e}"))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(format!(
+            "claude --version 退出码 {:?}: {}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
+    }
+}
+
 /// 截断到 SUMMARY_MAX 字符，避免 journal / meta.yml 被超长输出撑爆。
 fn truncate(s: &str) -> String {
     let t = s.trim();

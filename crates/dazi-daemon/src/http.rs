@@ -48,8 +48,30 @@ pub(crate) fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json
         .ok_or_else(|| err(StatusCode::NOT_FOUND, format!("找不到项目: {slug}")))
 }
 
-pub async fn health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "ok": true, "service": "dazi-daemon" }))
+pub async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let cfg = config::load().ok();
+    let workspace = cfg
+        .and_then(|c| c.workspace)
+        .map(|w| w.display().to_string());
+    let claude = match tokio::task::spawn_blocking(dazi_core::autopilot::probe_claude).await {
+        Ok(Ok(v)) => serde_json::json!({ "ok": true, "version": v }),
+        Ok(Err(e)) => serde_json::json!({ "ok": false, "error": e }),
+        Err(e) => serde_json::json!({ "ok": false, "error": format!("探活任务失败: {e}") }),
+    };
+    Json(serde_json::json!({
+        "ok": true,
+        "service": "dazi-daemon",
+        "version": env!("CARGO_PKG_VERSION"),
+        "workspace": workspace,
+        "devices": state.auth.device_count(),
+        "claude": claude,
+    }))
+}
+
+/// 跨项目运行历史（活动+归档项目的 meta.runs 汇总，最近 N 条）。
+pub async fn get_runs() -> ApiResult<Vec<schedule::RunEntry>> {
+    let ws = workspace()?;
+    Ok(Json(schedule::list_recent_runs(&ws, 100)))
 }
 
 /// 手机只读 Web 页：编译进二进制，无需额外部署静态目录。

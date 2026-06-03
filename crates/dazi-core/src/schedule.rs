@@ -213,3 +213,37 @@ pub fn refresh_all(workspace: &Path) {
         let _ = recompute_and_save(&p);
     }
 }
+
+/// 一条运行历史记录（带项目归属），供 daemon /runs 端点汇总展示。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RunEntry {
+    pub slug: String,
+    pub name: String,
+    pub at: DateTime<Utc>,
+    pub action: String,
+    pub ok: bool,
+    pub message: Option<String>,
+}
+
+/// 汇总活动 + 归档项目的 meta.runs，按时间倒序取最近 limit 条。
+pub fn list_recent_runs(workspace: &Path, limit: usize) -> Vec<RunEntry> {
+    let mut summaries = list_projects(workspace).unwrap_or_default();
+    summaries.extend(crate::project::list_archived(workspace).unwrap_or_default());
+    let mut out: Vec<RunEntry> = Vec::new();
+    for s in summaries {
+        let Ok(meta) = read_meta(&s.path) else { continue };
+        for r in meta.runs {
+            out.push(RunEntry {
+                slug: s.slug.clone(),
+                name: s.name.clone(),
+                at: r.at,
+                action: r.action,
+                ok: r.ok,
+                message: r.message,
+            });
+        }
+    }
+    out.sort_by(|a, b| b.at.cmp(&a.at));
+    out.truncate(limit);
+    out
+}

@@ -68,6 +68,7 @@ async fn main() {
             get(http::get_memory).put(http_write::put_memory),
         )
         .route("/api/v1/due", get(http::get_due))
+        .route("/api/v1/runs", get(http::get_runs))
         .route(
             "/api/v1/projects/:slug/plan",
             post(http_approval::create_plan),
@@ -96,10 +97,17 @@ async fn main() {
         .expect("绑定端口失败");
 
     tracing::info!("dazi-daemon 监听 http://{addr}");
+    // 启动自检：claude 探活。失败仅告警，不阻断 daemon（只读功能仍可用，
+    // 自动执行/审批到点时会再报错）。
+    let claude_line = match dazi_core::autopilot::probe_claude() {
+        Ok(v) => format!("  claude: ✓ {v}"),
+        Err(e) => format!("  claude: ✗ 不可用 — {e}\n         （自动执行/审批将无法运行，请检查 claude 安装与登录）"),
+    };
     println!("\n========================================");
     println!("  dazi-daemon 已启动: http://{addr}");
     println!("  配对 PIN: {}", auth.pin());
     println!("  （手机首次连接时输入此 PIN 完成配对）");
+    println!("{claude_line}");
     println!("========================================\n");
 
     axum::serve(listener, app).await.expect("服务异常退出");

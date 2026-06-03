@@ -93,6 +93,11 @@ impl Auth {
         };
         store.devices.iter().any(|d| d.token_hash == hash)
     }
+
+    /// 已配对设备数（供 /health 展示）。
+    pub fn device_count(&self) -> usize {
+        self.store.lock().map(|s| s.devices.len()).unwrap_or(0)
+    }
 }
 
 fn gen_token() -> String {
