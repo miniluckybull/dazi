@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  dazi-daemon LaunchAgent 模板。
+  占位符 __DAEMON_BIN__ / __HOME__ / __WORKDIR__ / __PATH__ 由 install-daemon.sh 替换。
+  这是「用户级」LaunchAgent（~/Library/LaunchAgents），随你登录启动，不需 root。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wxw.dazi-daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__DAEMON_BIN__</string>
+    </array>
+
+    <!-- 登录即启动 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 崩溃自动重拉 -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- 工作目录设为项目根（cargo run 等价行为；也可设 HOME） -->
+    <key>WorkingDirectory</key>
+    <string>__WORKDIR__</string>
+
+    <!--
+      LaunchAgent 默认 PATH 极简，拿不到 /opt/homebrew/bin。
+      daemon 内部跑 claude 时用 zsh -lc 能拿回 PATH，这里再显式补一层兜底。
+    -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>__PATH__</string>
+    </dict>
+
+    <!-- stdout/stderr 重定向到日志（LaunchAgent 无终端，PIN/探活结果看这里） -->
+    <key>StandardOutPath</key>
+    <string>__HOME__/.dazi/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.dazi/daemon.err.log</string>
+
+    <!-- 退出后最短重启间隔，避免崩溃时疯狂重拉 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
