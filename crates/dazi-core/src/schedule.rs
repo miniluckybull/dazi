@@ -1,9 +1,37 @@
 use chrono::{DateTime, Datelike, Duration, Utc};
+use serde::Deserialize;
 use std::path::Path;
 
 use crate::project::{
-    list_projects, projects_dir, read_meta, write_meta, Interval, ProjectMeta, RunRecord,
+    list_projects, projects_dir, read_meta, write_meta, Interval, OnTrigger, ProjectMeta,
+    RunRecord, Schedule,
 };
+
+/// 设置任务调度的补丁（task_type + schedule + on_trigger）。
+/// 桌面 app 与 daemon 共用：改 meta 后重算 next_run_at。
+#[derive(Debug, Deserialize)]
+pub struct SchedulePatch {
+    pub task_type: String,
+    #[serde(default)]
+    pub schedule: Option<Schedule>,
+    #[serde(default)]
+    pub on_trigger: Option<OnTrigger>,
+}
+
+/// 应用调度补丁：写入 meta 并重算下一次触发时间。
+pub fn apply_schedule_patch(
+    project_path: &Path,
+    patch: SchedulePatch,
+) -> Result<ProjectMeta, String> {
+    let mut meta = read_meta(project_path)?;
+    meta.task_type = patch.task_type;
+    meta.schedule = patch.schedule;
+    meta.on_trigger = patch.on_trigger;
+    meta.updated_at = Utc::now();
+    write_meta(project_path, &meta)?;
+    recompute_and_save(project_path)
+}
+
 
 /// 计算给定 meta 的下一次触发时间。
 /// - oneoff: None

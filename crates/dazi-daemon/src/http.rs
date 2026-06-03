@@ -15,6 +15,8 @@ use crate::auth::Auth;
 #[derive(Clone)]
 pub struct AppState {
     pub auth: Arc<Auth>,
+    pub events: crate::ws::WsSink,
+    pub approvals: Arc<crate::approval::ApprovalStore>,
 }
 
 /// 统一错误：把 dazi-core 的 String 错误映射为 500 + JSON。
@@ -25,18 +27,18 @@ pub struct ErrBody {
     pub error: String,
 }
 
-fn err(code: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<ErrBody>) {
+pub(crate) fn err(code: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<ErrBody>) {
     (code, Json(ErrBody { error: msg.into() }))
 }
 
-fn workspace() -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
+pub(crate) fn workspace() -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
     let cfg = config::load().map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     cfg.workspace
         .ok_or_else(|| err(StatusCode::CONFLICT, "尚未设置工作区"))
 }
 
 /// 在活动 + 归档项目里按 slug 找项目目录。
-fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
+pub(crate) fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json<ErrBody>)> {
     let ws = workspace()?;
     let mut all = project::list_projects(&ws).unwrap_or_default();
     all.extend(project::list_archived(&ws).unwrap_or_default());
@@ -84,7 +86,7 @@ pub async fn get_meta(Path(slug): Path<String>) -> ApiResult<project::ProjectMet
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, serde::Deserialize)]
 pub struct TextBody {
     pub content: String,
 }
@@ -111,6 +113,18 @@ pub async fn get_context(Path(slug): Path<String>) -> ApiResult<TextBody> {
 pub async fn get_due() -> ApiResult<Vec<schedule::DueProject>> {
     let ws = workspace()?;
     Ok(Json(schedule::scan_due(&ws, chrono::Utc::now())))
+}
+
+/// 读全局记忆：name 限 profile/facts/patterns，防路径穿越。
+pub async fn get_memory(Path(name): Path<String>) -> ApiResult<TextBody> {
+    let file = match name.as_str() {
+        "profile" => "profile.md",
+        "facts" => "facts.md",
+        "patterns" => "patterns.md",
+        _ => return Err(err(StatusCode::BAD_REQUEST, "记忆名只能是 profile/facts/patterns")),
+    };
+    let content = memory::read_global(file).unwrap_or_default();
+    Ok(Json(TextBody { content }))
 }
 
 #[derive(serde::Deserialize)]

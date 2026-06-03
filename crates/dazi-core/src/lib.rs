@@ -3,6 +3,8 @@
 
 pub mod autopilot;
 pub mod config;
+pub mod events;
 pub mod memory;
 pub mod project;
+pub mod prompt;
 pub mod schedule;
