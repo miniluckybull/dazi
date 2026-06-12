@@ -5,6 +5,7 @@ mod auth;
 mod http;
 mod http_approval;
 mod http_write;
+mod scheduler;
 mod ws;
 
 use axum::{
@@ -84,7 +85,7 @@ async fn main() {
         .merge(public)
         .merge(protected)
         .layer(CorsLayer::permissive())
-        .with_state(state);
+        .with_state(state.clone());
 
     let port = std::env::var("DAZI_DAEMON_PORT")
         .ok()
@@ -109,6 +110,10 @@ async fn main() {
     println!("  （手机首次连接时输入此 PIN 完成配对）");
     println!("{claude_line}");
     println!("========================================\n");
+
+    // 启动内置调度循环：到点的 autopilot 任务走审批流（产计划推手机），
+    // notify 任务推 TaskTriggered。让纯服务器部署也能自动推进定时任务。
+    scheduler::spawn(state.clone());
 
     axum::serve(listener, app).await.expect("服务异常退出");
 }

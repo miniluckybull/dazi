@@ -27,3 +27,6 @@ src-tauri/gen/schemas
 *.njsproj
 *.sln
 *.sw?
+
+# 本地部署进度文件（含内网 IP/主机/中转等环境专属信息，不入库）
+PROGRESS.md

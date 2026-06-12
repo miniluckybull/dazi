@@ -9,11 +9,15 @@ import {
   Clock,
   Repeat,
   Zap,
-  Settings,
+  Brain,
+  Sun,
+  Moon,
+  SunMoon,
 } from "lucide-react";
 import { useApp, ProjectSummary, ProjectInit, TaskType } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
 import { SettingsPanel } from "./SettingsPanel";
+import { ThemePref, cycleTheme, getThemePref, initTheme, onThemeChange } from "./theme";
 import "./App.css";
 
 function formatNext(iso: string): string {
@@ -31,7 +35,7 @@ function formatNext(iso: string): string {
 }
 
 function leftBorderColor(p: ProjectSummary): string {
-  if (p.archived) return "border-l-emerald-300/80";
+  if (p.archived) return "border-l-gray-300/90";
   if (p.handed_off_at) return "border-l-amber-400/90";
   return "border-l-sky-400/80";
 }
@@ -49,6 +53,32 @@ function taskTypeBadgeTitle(t: TaskType): string {
   if (t === "scheduled") return "定时任务";
   if (t === "recurring") return "循环任务";
   return "一次性任务";
+}
+
+function ThemeToggle() {
+  const [pref, setPref] = useState<ThemePref>(getThemePref);
+  useEffect(() => onThemeChange(setPref), []);
+  const title =
+    pref === "light"
+      ? "外观：浅色（点击切深色）"
+      : pref === "dark"
+        ? "外观：深色（点击切跟随系统）"
+        : "外观：跟随系统（点击切浅色）";
+  return (
+    <button
+      onClick={() => cycleTheme()}
+      title={title}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
+    >
+      {pref === "light" ? (
+        <Sun size={14} />
+      ) : pref === "dark" ? (
+        <Moon size={14} />
+      ) : (
+        <SunMoon size={14} />
+      )}
+    </button>
+  );
 }
 
 function WorkspacePicker() {
@@ -72,11 +102,11 @@ function WorkspacePicker() {
         </p>
         <button
           onClick={pick}
-          className="rounded-lg bg-indigo-600/90 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600"
+          className="rounded-lg bg-accent/90 px-4 py-2 text-sm font-medium text-on-accent shadow-md shadow-accent/20 transition hover:bg-accent"
         >
           选择工作区文件夹
         </button>
-        {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </div>
     </div>
   );
@@ -84,6 +114,7 @@ function WorkspacePicker() {
 
 function NewTaskForm({ onCancel }: { onCancel: () => void }) {
   const createProject = useApp((s) => s.createProject);
+  const linkExistingFolder = useApp((s) => s.linkExistingFolder);
   const [name, setName] = useState("");
 
   async function submit(e: React.FormEvent) {
@@ -93,6 +124,13 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
       requires_references: true,
     };
     await createProject(name.trim(), init);
+    onCancel();
+  }
+
+  async function linkFolder() {
+    const dir = await open({ directory: true, title: "选择要关联的项目文件夹" });
+    if (!dir) return;
+    await linkExistingFolder(dir as string);
     onCancel();
   }
 
@@ -106,12 +144,12 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="任务名称"
-        className="w-full rounded-md border border-white/70 bg-white/80 px-2 py-1.5 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+        className="w-full rounded-md border border-white/70 bg-white/80 px-2 py-1.5 text-sm outline-none transition focus:border-accent-border focus:bg-white"
       />
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
-          className="flex-1 rounded-md bg-indigo-600/90 py-1.5 text-xs font-medium text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-600"
+          className="flex-1 rounded-md bg-accent/90 py-1.5 text-xs font-medium text-on-accent shadow-sm shadow-accent/20 transition hover:bg-accent"
         >
           创建
         </button>
@@ -123,6 +161,13 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
           取消
         </button>
       </div>
+      <button
+        type="button"
+        onClick={linkFolder}
+        className="w-full rounded-md border border-dashed border-accent-border/70 bg-white/50 py-1.5 text-xs text-accent-text transition hover:bg-accent-soft/70"
+      >
+        关联已有文件夹…
+      </button>
     </form>
   );
 }
@@ -141,6 +186,7 @@ function ProjectList({
   const deleteProject = useApp((s) => s.deleteProject);
   const revealReferences = useApp((s) => s.revealReferences);
   const refreshProjects = useApp((s) => s.refreshProjects);
+  const attention = useApp((s) => s.attention);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -184,17 +230,18 @@ function ProjectList({
           {showArchived ? "已归档" : "工作任务"}
         </h2>
         <div className="flex items-center gap-1.5">
+          <ThemeToggle />
           <button
             onClick={onOpenSettings}
             title="我的记忆"
             className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
           >
-            <Settings size={14} />
+            <Brain size={14} />
           </button>
           {!showArchived && (
             <button
               onClick={() => setCreating((v) => !v)}
-              className="rounded-md bg-indigo-600/90 px-2 py-1 text-xs font-medium text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-600"
+              className="rounded-md bg-accent/90 px-2 py-1 text-xs font-medium text-on-accent shadow-sm shadow-accent/20 transition hover:bg-accent"
             >
               {creating ? "取消" : "+ 新建"}
             </button>
@@ -244,15 +291,15 @@ function ProjectList({
               p
             )} px-4 py-3 text-left transition ${
               active
-                ? "bg-indigo-100/90 shadow-inner ring-1 ring-inset ring-indigo-300/70"
+                ? "bg-accent-soft/90 shadow-inner ring-1 ring-inset ring-accent-border/70"
                 : "hover:bg-white/50"
             }`}
           >
-            <div className={`truncate pr-12 text-sm font-medium ${active ? "text-indigo-900" : "text-gray-800"}`}>
+            <div className={`truncate pr-12 text-sm font-medium ${active ? "text-accent-text" : "text-gray-800"}`}>
               {p.name}
             </div>
             {p.next_run_at && (
-              <div className="mt-0.5 truncate pr-12 text-[11px] text-indigo-500">
+              <div className="mt-0.5 truncate pr-12 text-[11px] text-accent/80">
                 下次：{formatNext(p.next_run_at)}
               </div>
             )}
@@ -289,6 +336,19 @@ function ProjectList({
                 className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded border border-white/70 bg-white/80 backdrop-blur"
               >
                 {taskTypeBadgeIcon(p.task_type, p.archived)}
+                {attention[p.slug] ? (
+                  <span
+                    title="Claude 正在等待确认"
+                    className="absolute -bottom-0.5 -right-0.5 h-[7px] w-[7px] animate-pulse rounded-full border border-white bg-amber-500"
+                  />
+                ) : p.last_run_ok != null ? (
+                  <span
+                    title={p.last_run_ok ? "上次执行成功" : "上次执行失败"}
+                    className={`absolute -bottom-0.5 -right-0.5 h-[7px] w-[7px] rounded-full border border-white ${
+                      p.last_run_ok ? "bg-emerald-500" : "bg-red-500"
+                    }`}
+                  />
+                ) : null}
               </span>
             )}
             {!showArchived && (
@@ -319,6 +379,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
+    initTheme();
     loadConfig();
   }, [loadConfig]);
 

@@ -1,100 +1,196 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dazi</title>
 <style>
+  /* ============================================================
+     设计令牌（与桌面端 tailwind.config.js 的 accent 系 / src/App.css 渐变同源）
+     扩展暗色等主题时：新增 [data-theme="dark"] { --xx: ...; } 覆盖即可
+     ============================================================ */
+  :root {
+    /* 主色（violet 紫罗兰） */
+    --accent: #7c3aed;
+    --accent-hover: #6d28d9;
+    --accent-soft: #ede9fe;
+    --accent-border: #c4b5fd;
+    --accent-text: #6d28d9;
+    /* 背景与面板（轻玻璃态） */
+    --bg-grad:
+      radial-gradient(120% 90% at 0% 0%, rgba(124,58,237,0.22) 0%, rgba(124,58,237,0) 55%),
+      radial-gradient(90% 80% at 100% 0%, rgba(192,38,211,0.10) 0%, rgba(192,38,211,0) 50%),
+      radial-gradient(80% 70% at 100% 100%, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0) 60%),
+      linear-gradient(180deg, #faf7ff 0%, #ece4fb 100%);
+    --panel: rgba(255,255,255,0.70);
+    --panel-strong: rgba(255,255,255,0.85);
+    --panel-solid: #ffffff;
+    --border: rgba(167,139,250,0.55);
+    --line: #ddd3f4;
+    --line-input: #c4b5fd;
+    /* 文字 */
+    --text: #211c37;
+    --text-dim: #6a6680;
+    --text-faint: #9a96af;
+    /* 圆角 */
+    --radius-lg: 16px;
+    --radius: 12px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
+    /* 阴影（与 tailwind shadow-glass / glass-lg 同值，violet） */
+    --shadow-card: 0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -12px rgba(124,58,237,0.28);
+    --shadow-lg: 0 1px 0 rgba(255,255,255,0.7) inset, 0 18px 48px -20px rgba(124,58,237,0.38);
+    /* 字体 */
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    /* 状态色（任务类型，与桌面端 amber/sky/emerald/gray 对齐） */
+    --c-oneoff-bg: #fef3c7;  --c-oneoff: #b45309;
+    --c-sched-bg: #e0f2fe;   --c-sched: #0369a1;
+    --c-recur-bg: #d1fae5;   --c-recur: #047857;
+    --c-arch-bg: #e5e7eb;    --c-arch: #6b7280;
+    /* 危险 / 警示 / 成败 */
+    --c-danger-bg: #fef2f2;  --c-danger-border: #fecaca;  --c-danger: #b91c1c;
+    --c-warn-bg: #fffbeb;    --c-warn: #92400e;
+    --c-ok: #059669;         --c-err: #dc2626;
+    /* 顶部 banner */
+    --banner-bg: #111827;    --banner-text: #ffffff;
+    /* 卡片按压态 */
+    --card-active: rgba(255,255,255,0.5);
+  }
+  /* [data-theme="light"] 即默认 :root 值；暗色主题覆盖如下 */
+  [data-theme="dark"] {
+    --accent: #8b5cf6;
+    --accent-hover: #a78bfa;
+    --accent-soft: #342c58;
+    --accent-border: #6d5ebc;
+    --accent-text: #c4b5fd;
+    --bg-grad:
+      radial-gradient(120% 90% at 0% 0%, rgba(139,92,246,0.20) 0%, rgba(139,92,246,0) 55%),
+      radial-gradient(90% 80% at 100% 0%, rgba(192,38,211,0.08) 0%, rgba(192,38,211,0) 50%),
+      radial-gradient(80% 70% at 100% 100%, rgba(139,92,246,0.14) 0%, rgba(139,92,246,0) 60%),
+      linear-gradient(180deg, #13101e 0%, #1c1730 100%);
+    --panel: rgba(41,37,60,0.70);
+    --panel-strong: rgba(41,37,60,0.85);
+    --panel-solid: #29253c;
+    --border: rgba(139,124,214,0.45);
+    --line: #4e476c;
+    --line-input: #5d5586;
+    --text: #e4e1f4;
+    --text-dim: #9c96ba;
+    --text-faint: #7d7799;
+    --shadow-card: 0 1px 0 rgba(196,181,253,0.10) inset, 0 8px 24px -12px rgba(0,0,0,0.55);
+    --shadow-lg: 0 1px 0 rgba(196,181,253,0.12) inset, 0 18px 48px -20px rgba(0,0,0,0.65);
+    --c-oneoff-bg: #3a2e12;  --c-oneoff: #fbbf24;
+    --c-sched-bg: #12303f;   --c-sched: #38bdf8;
+    --c-recur-bg: #0e3328;   --c-recur: #34d399;
+    --c-arch-bg: #2c303d;    --c-arch: #9aa3b5;
+    --c-danger-bg: #3a1d1d;  --c-danger-border: #7f3535;  --c-danger: #f87171;
+    --c-warn-bg: #382b10;    --c-warn: #fbbf24;
+    --c-ok: #34d399;         --c-err: #f87171;
+    --banner-bg: #e5e7eb;    --banner-text: #111827;
+    --card-active: rgba(255,255,255,0.06);
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
-    background: #f4f4f7; color: #1c1c1e;
+    margin: 0; font: 15px/1.5 var(--font-ui);
+    background: var(--bg-grad) fixed; color: var(--text);
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   header {
     position: sticky; top: 0; z-index: 10;
-    background: rgba(255,255,255,0.85); backdrop-filter: blur(12px);
-    border-bottom: 1px solid #e0e0e5; padding: 12px 16px;
+    background: var(--panel-strong);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border); padding: 12px 16px;
     display: flex; align-items: center; gap: 10px;
   }
   header h1 { font-size: 17px; margin: 0; flex: 1; font-weight: 600; }
   header button {
-    border: none; background: none; color: #4f46e5; font-size: 15px;
+    border: none; background: none; color: var(--accent); font-size: 15px;
     padding: 4px 8px; cursor: pointer;
   }
   main { padding: 12px 16px 32px; max-width: 720px; margin: 0 auto; }
   .card {
-    background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    cursor: pointer;
   }
-  .card:active { background: #f0f0f5; }
+  .card:active { background: var(--card-active); }
+  @media (hover: hover) { .card:hover { background: var(--panel-strong); } }
   .card .name { font-weight: 600; margin-bottom: 4px; }
-  .card .meta { font-size: 12px; color: #8e8e93; display: flex; gap: 8px; }
-  .badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11px; }
-  .badge.oneoff { background: #fff3cd; color: #997404; }
-  .badge.scheduled { background: #cfe2ff; color: #0a58ca; }
-  .badge.recurring { background: #d1e7dd; color: #146c43; }
-  .badge.archived { background: #e2e3e5; color: #6c757d; }
-  .due { background: #fef2f2; border: 1px solid #fecaca; }
-  .due .name { color: #b91c1c; }
+  .card .meta { font-size: 12px; color: var(--text-dim); display: flex; gap: 8px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: var(--radius-sm); font-size: 11px; }
+  .badge.oneoff { background: var(--c-oneoff-bg); color: var(--c-oneoff); }
+  .badge.scheduled { background: var(--c-sched-bg); color: var(--c-sched); }
+  .badge.recurring { background: var(--c-recur-bg); color: var(--c-recur); }
+  .badge.archived { background: var(--c-arch-bg); color: var(--c-arch); }
+  .due { background: var(--c-danger-bg); border: 1px solid var(--c-danger-border); }
+  .due .name { color: var(--c-danger); }
   pre {
-    white-space: pre-wrap; word-wrap: break-word; font: 13px/1.6 ui-monospace, monospace;
-    background: #fff; border-radius: 12px; padding: 14px 16px; margin: 0;
+    white-space: pre-wrap; word-wrap: break-word; font: 13px/1.6 var(--font-mono);
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin: 0;
   }
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
   .tabs button {
-    flex: 1; padding: 8px; border: 1px solid #e0e0e5; background: #fff; border-radius: 8px;
-    font-size: 14px; cursor: pointer; color: #1c1c1e;
+    flex: 1; padding: 8px; border: 1px solid var(--line); background: var(--panel-solid); border-radius: var(--radius-md);
+    font-size: 14px; cursor: pointer; color: var(--text);
   }
-  .tabs button.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
-  .empty { text-align: center; color: #8e8e93; padding: 40px 0; }
+  .tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .empty { text-align: center; color: var(--text-dim); padding: 40px 0; }
   .pair-box { max-width: 320px; margin: 60px auto; text-align: center; }
   .pair-box h2 { font-size: 20px; }
-  .pair-box p { color: #8e8e93; font-size: 14px; }
+  .pair-box p { color: var(--text-dim); font-size: 14px; }
   .pair-box input {
     width: 100%; padding: 12px; font-size: 22px; text-align: center; letter-spacing: 6px;
-    border: 1px solid #d0d0d5; border-radius: 10px; margin: 16px 0;
+    border: 1px solid var(--line-input); border-radius: var(--radius-md); margin: 16px 0;
   }
   .pair-box button {
     width: 100%; padding: 13px; font-size: 16px; font-weight: 600;
-    background: #4f46e5; color: #fff; border: none; border-radius: 10px; cursor: pointer;
+    background: var(--accent); color: #fff; border: none; border-radius: var(--radius-md); cursor: pointer;
   }
-  .pair-box .err { color: #b91c1c; font-size: 13px; min-height: 18px; }
-  .sec-title { font-size: 13px; color: #8e8e93; margin: 18px 0 8px; font-weight: 600; }
+  .pair-box button:hover { background: var(--accent-hover); }
+  .pair-box .err { color: var(--c-danger); font-size: 13px; min-height: 18px; }
+  .sec-title { font-size: 13px; color: var(--text-dim); margin: 18px 0 8px; font-weight: 600; }
   .toolbar { display: flex; gap: 8px; margin-bottom: 4px; }
   .btn-primary {
     padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
-    background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: var(--radius-md);
   }
+  .btn-primary:hover { background: var(--accent-hover); }
   .toolbar button:not(.btn-primary) {
     padding: 10px 14px; font-size: 14px; cursor: pointer;
-    background: #fff; color: #1c1c1e; border: 1px solid #e0e0e5; border-radius: 8px;
+    background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-md);
   }
-  .card.approval { background: #eef2ff; border: 1px solid #c7d2fe; cursor: default; }
+  .card.approval { background: var(--accent-soft); border: 1px solid var(--accent-border); cursor: default; }
   .card.approval .plan {
     margin: 8px 0; padding: 10px; max-height: 220px; overflow-y: auto;
-    background: #fff; border-radius: 8px; font-size: 12px;
+    background: var(--panel-solid); border: none; border-radius: var(--radius-md); font-size: 12px;
   }
   .approve-row { display: flex; gap: 8px; }
-  .approve-row button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
-  .btn-approve { background: #4f46e5; color: #fff; }
-  .btn-reject { background: #fff; color: #b91c1c; border: 1px solid #fecaca !important; }
+  .approve-row button { flex: 1; padding: 10px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-approve { background: var(--accent); color: #fff; }
+  .btn-approve:hover { background: var(--accent-hover); }
+  .btn-reject { background: var(--panel-solid); color: var(--c-danger); border: 1px solid var(--c-danger-border) !important; }
   textarea#ed {
-    width: 100%; min-height: 300px; padding: 12px; border: 1px solid #d0d0d5;
-    border-radius: 10px; font: 13px/1.6 ui-monospace, monospace; resize: vertical;
+    width: 100%; min-height: 300px; padding: 12px; border: 1px solid var(--line-input);
+    border-radius: var(--radius-md); font: 13px/1.6 var(--font-mono); resize: vertical;
+    background: var(--panel-solid);
   }
   .detail-actions { margin-top: 14px; }
   .detail-actions .btn-primary { width: 100%; }
-  .st { margin-left: 10px; font-size: 12px; color: #8e8e93; }
-  .fld { display: block; font-size: 13px; color: #555; margin-bottom: 10px; }
+  .st { margin-left: 10px; font-size: 12px; color: var(--text-dim); }
+  .fld { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
   .fld input {
     display: block; width: 100%; margin-top: 6px; padding: 11px; font-size: 15px;
-    border: 1px solid #d0d0d5; border-radius: 10px;
+    border: 1px solid var(--line-input); border-radius: var(--radius-md); background: var(--panel-solid);
   }
   .banner {
     position: fixed; left: 50%; transform: translateX(-50%) translateY(-80px);
     top: calc(env(safe-area-inset-top) + 10px); z-index: 100;
-    background: #1c1c1e; color: #fff; padding: 10px 18px; border-radius: 20px;
+    background: var(--banner-bg); color: var(--banner-text); padding: 10px 18px; border-radius: 20px;
     font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.3s; max-width: 90vw;
   }
   .banner.show { transform: translateX(-50%) translateY(0); }
@@ -102,20 +198,44 @@
   .seg.sm { margin-bottom: 8px; }
   .seg button {
     flex: 1; padding: 10px; font-size: 14px; cursor: pointer;
-    background: #fff; color: #1c1c1e; border: 1px solid #e0e0e5; border-radius: 8px;
+    background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-md);
   }
-  .seg button.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .seg button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .inline { display: inline-flex; gap: 6px; align-items: center; }
   .inline input, .inline select, .fld select {
-    padding: 9px; border: 1px solid #d0d0d5; border-radius: 8px; font-size: 15px;
+    padding: 9px; border: 1px solid var(--line-input); border-radius: var(--radius-md); font-size: 15px;
+    background: var(--panel-solid);
   }
-  .risk { font-size: 13px; color: #8e6d00; background: #fff8e1; padding: 10px; border-radius: 8px; }
+  .risk { font-size: 13px; color: var(--c-warn); background: var(--c-warn-bg); padding: 10px; border-radius: var(--radius-md); }
   .hidden { display: none; }
   .detail-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
   .detail-actions button {
-    width: 100%; padding: 12px; font-size: 14px; border-radius: 8px; cursor: pointer;
+    width: 100%; padding: 12px; font-size: 14px; border-radius: var(--radius-md); cursor: pointer;
   }
-  .detail-actions #sched { background: #fff; color: #1c1c1e; border: 1px solid #e0e0e5; }
+  .detail-actions #sched { background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); }
+
+  /* ============================================================
+     PC 响应式（≥900px）：列表两列网格、表单限宽居中
+     选择器与 app.js 的 renderList/renderDetail/renderSchedule/renderMemory
+     生成的 DOM 结构耦合，改 JS 结构时需同步调整
+     ============================================================ */
+  @media (min-width: 900px) {
+    main { max-width: 1040px; padding: 20px 28px 48px; }
+    header { padding: 14px 28px; }
+    /* 列表页：区块标题占整行，卡片两列 */
+    #body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    #body .sec-title { grid-column: 1 / -1; margin: 10px 0 0; }
+    #body .card { margin-bottom: 0; }
+    #body .card.approval { grid-column: 1 / -1; } /* 审批卡含计划全文，横跨两列 */
+    #body .empty { grid-column: 1 / -1; }
+    .toolbar { max-width: 420px; }
+    /* 详情 / 调度 / 记忆 / 新建页：收敛到舒适阅读宽度并居中 */
+    #m > .tabs, #tabbody, .detail-actions, #m > .fld, #m > .seg,
+    #schedFields, #actionBox, #mb, #m > #saveS, #m > .err, #m > #ok,
+    .pair-box { max-width: 720px; margin-left: auto; margin-right: auto; }
+    #m > #saveS, #m > #ok { display: block; }
+    textarea#ed { min-height: 60vh; }
+  }
 </style>
 </head>
 <body>

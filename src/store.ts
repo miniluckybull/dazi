@@ -62,6 +62,8 @@ export interface ProjectSummary {
   archived: boolean;
   task_type: TaskType;
   next_run_at: string | null;
+  last_run_ok: boolean | null;
+  last_run_at: string | null;
 }
 
 export interface ProjectMeta {
@@ -118,12 +120,16 @@ interface AppState {
   selectedSlug: string | null;
   loading: boolean;
   error: string | null;
+  /** 终端会话等待用户确认的任务（slug → true），由 terminal/manager 维护 */
+  attention: Record<string, boolean>;
+  setAttention: (slug: string, v: boolean) => void;
   loadConfig: () => Promise<void>;
   setWorkspace: (path: string) => Promise<void>;
   refreshProjects: () => Promise<void>;
   refreshArchived: () => Promise<void>;
   setShowArchived: (v: boolean) => void;
   createProject: (name: string, init?: ProjectInit) => Promise<void>;
+  linkExistingFolder: (path: string) => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
   selectProject: (slug: string | null) => void;
   readReadme: (projectPath: string) => Promise<string>;
@@ -171,6 +177,13 @@ export const useApp = create<AppState>((set, get) => ({
   selectedSlug: null,
   loading: false,
   error: null,
+  attention: {},
+
+  setAttention: (slug, v) =>
+    set((st) => {
+      if (!!st.attention[slug] === v) return st;
+      return { attention: { ...st.attention, [slug]: v } };
+    }),
 
   loadConfig: async () => {
     try {
@@ -246,6 +259,24 @@ export const useApp = create<AppState>((set, get) => ({
         workspace: config.workspace,
         name,
         init: init ?? null,
+      });
+      set({ error: null, selectedSlug: summary.slug });
+      await get().refreshProjects();
+    } catch (e: any) {
+      set({ error: String(e) });
+    }
+  },
+
+  linkExistingFolder: async (path) => {
+    const { config } = get();
+    if (!config?.workspace) {
+      set({ error: "请先选择工作区" });
+      return;
+    }
+    try {
+      const summary = await invoke<ProjectSummary>("create_project_from_path", {
+        workspace: config.workspace,
+        source: path,
       });
       set({ error: null, selectedSlug: summary.slug });
       await get().refreshProjects();

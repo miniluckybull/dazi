@@ -17,14 +17,16 @@ pub struct RunOutcome {
 const TIMEOUT_SECS: u64 = 600; // 10 分钟硬超时
 const SUMMARY_MAX: usize = 600; // journal/run.message 截断长度
 
-/// 解析 claude 可执行文件路径。GUI app 从 Finder 启动时 PATH 精简，
-/// 拿不到 /opt/homebrew/bin，所以显式探测常见位置，最后回退裸 "claude"。
+/// 解析 claude 可执行文件路径。GUI app 从 Finder 启动 / systemd 启动时 PATH 精简，
+/// 拿不到 homebrew、npm global 等目录，所以显式探测常见位置，最后回退裸 "claude"。
 pub fn resolve_claude_bin() -> String {
     if let Ok(home) = std::env::var("HOME") {
         let candidates = [
             format!("{home}/.claude/local/claude"),
-            "/opt/homebrew/bin/claude".to_string(),
+            format!("{home}/.local/bin/claude"),
+            "/opt/homebrew/bin/claude".to_string(), // macOS Homebrew
             "/usr/local/bin/claude".to_string(),
+            "/usr/bin/claude".to_string(), // Linux 包管理常见位置
         ];
         for c in candidates {
             if Path::new(&c).exists() {
@@ -35,12 +37,24 @@ pub fn resolve_claude_bin() -> String {
     "claude".to_string()
 }
 
+/// 解析登录 shell：用 `<shell> -lc` 走登录态拿回 PATH 与 ~/.claude 凭证。
+/// macOS 默认 zsh、Linux 默认 bash，运行时探测以同一份代码两端可用。
+/// `-lc` 语法 zsh 与 bash 通用。
+pub fn login_shell() -> String {
+    for c in ["/bin/zsh", "/usr/bin/zsh", "/bin/bash", "/usr/bin/bash"] {
+        if Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    "bash".to_string()
+}
+
 /// claude 探活：跑 `claude --version`（快、不耗 token、不需登录态），
 /// 用于 daemon 启动自检。Ok(版本串) / Err(原因)。
 pub fn probe_claude() -> Result<String, String> {
     let bin = resolve_claude_bin();
     let inner = format!("{} --version", shell_single_quote(&bin));
-    let out = Command::new("zsh")
+    let out = Command::new(login_shell())
         .arg("-lc")
         .arg(&inner)
         .stdin(Stdio::null())
@@ -122,12 +136,12 @@ fn parse_outcome(stdout: &str) -> RunOutcome {
     }
 }
 
-/// 单引号包裹用于 zsh：把 ' 替换成 '\'' 。
-fn shell_single_quote(s: &str) -> String {
+/// 单引号包裹用于 POSIX shell（zsh/bash 通用）：把 ' 替换成 '\'' 。
+pub fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// 杀掉整个进程组（pgid 为 zsh 组长的 pid）：先 TERM 给清理机会，再 KILL 兜底。
+/// 杀掉整个进程组（pgid 为 shell 组长的 pid）：先 TERM 给清理机会，再 KILL 兜底。
 /// `kill -<n> -<pgid>` 的负号表示把信号发给整个进程组。
 fn kill_group(pgid: u32) {
     let _ = Command::new("kill")
@@ -184,15 +198,15 @@ fn run_claude(
         }
     }
 
-    let mut child = Command::new("zsh")
+    let mut child = Command::new(login_shell())
         .arg("-lc")
         .arg(&inner)
         .current_dir(project_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // 让 zsh 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
-        // 避免只杀 zsh 而 claude 子进程变孤儿继续在后台改文件。
+        // 让 shell 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
+        // 避免只杀 shell 而 claude 子进程变孤儿继续在后台改文件。
         .process_group(0)
         .spawn()
         .map_err(|e| format!("启动 claude 失败: {e}"))?;
@@ -216,7 +230,7 @@ fn run_claude(
     });
 
     // 轮询 try_wait 实现硬超时，保持对 child 的所有权以便超时时 kill。
-    // pgid == zsh 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
+    // pgid == shell 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
     let pgid = child.id();
     let start = std::time::Instant::now();
     let timed_out = loop {

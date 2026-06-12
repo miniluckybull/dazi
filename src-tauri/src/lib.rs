@@ -1,4 +1,5 @@
 mod config;
+mod pty;
 
 use dazi_core::{autopilot, memory, project, prompt, schedule};
 
@@ -53,6 +54,14 @@ fn create_project(
     init: Option<ProjectInit>,
 ) -> Result<ProjectSummary, String> {
     project::create_project_with(&workspace, &name, init.unwrap_or_default())
+}
+
+#[tauri::command]
+fn create_project_from_path(
+    workspace: PathBuf,
+    source: PathBuf,
+) -> Result<ProjectSummary, String> {
+    project::create_project_from_path(&workspace, &source)
 }
 
 #[tauri::command]
@@ -306,6 +315,27 @@ fn read_terminal_kind(workspace: &Option<PathBuf>) -> String {
     }
 }
 
+/// 终端模式：默认内嵌（embedded）；.dazi/config.yml 写 `terminal: external`
+/// 则交接/继续走旧的外部 Terminal.app/iTerm 路径（一键回退）。
+#[tauri::command]
+fn get_terminal_mode() -> Result<String, String> {
+    let cfg = config::load()?;
+    let Some(ws) = cfg.workspace else {
+        return Ok("embedded".into());
+    };
+    let cfg_path = ws.join(".dazi").join("config.yml");
+    let Ok(raw) = std::fs::read_to_string(&cfg_path) else {
+        return Ok("embedded".into());
+    };
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(&raw) else {
+        return Ok("embedded".into());
+    };
+    match value.get("terminal").and_then(|v| v.as_str()) {
+        Some(s) if s.eq_ignore_ascii_case("external") => Ok("external".into()),
+        _ => Ok("embedded".into()),
+    }
+}
+
 fn escape_applescript(s: &str) -> String {
     // 反斜杠和双引号要转义；反引号和 $ 在 shell 双引号里会触发命令替换/变量展开,
     // 而我们最终把整段拼进 `claude "..."` 用 osascript do script 执行,所以一并转义掉。
@@ -483,6 +513,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .manage(pty::PtyManager::default())
         .setup(|app| {
             // 升级迁移：把旧版 Tauri 配置目录下的 config.json 迁到 ~/.dazi/config.json，
             // 保证已设置 workspace 的老用户升级后不丢失配置。
@@ -541,6 +572,7 @@ pub fn run() {
             list_projects,
             list_archived_projects,
             create_project,
+            create_project_from_path,
             delete_project,
             read_project_meta,
             read_project_readme,
@@ -569,7 +601,21 @@ pub fn run() {
             unarchive_project,
             extract_skill,
             run_autopilot_now,
+            get_terminal_mode,
+            pty::pty_open,
+            pty::pty_launch,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_kill,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            // App 退出时杀掉全部 pty 子进程，避免孤儿
+            if let tauri::RunEvent::Exit = event {
+                use tauri::Manager;
+                let mgr = app.state::<pty::PtyManager>();
+                mgr.kill_all();
+            }
+        });
 }

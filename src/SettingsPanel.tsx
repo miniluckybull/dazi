@@ -186,7 +186,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   setProfileDirty(true);
                 }}
                 placeholder={`# 关于我\n\n- 角色: \n- 技术栈: \n- 工作偏好: \n- 沟通风格: `}
-                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-indigo-300 focus:bg-white"
+                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-accent-border focus:bg-white"
               />
             </div>
           ) : tab === "facts" ? (
@@ -201,7 +201,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   setFactsDirty(true);
                 }}
                 placeholder={`# 我的世界\n\n## 基础设施\n- 大龙: 4090 服务器, ssh ...\n\n## 设备\n- ...\n\n## 常用账号 / 路径\n- ...`}
-                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-indigo-300 focus:bg-white"
+                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-accent-border focus:bg-white"
               />
             </div>
           ) : (
@@ -216,7 +216,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   className={`flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
                     synthesizing
                       ? "cursor-not-allowed bg-white/60 text-gray-400"
-                      : "bg-indigo-600/90 text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-600"
+                      : "bg-accent/90 text-on-accent shadow-sm shadow-accent/20 hover:bg-accent"
                   }`}
                 >
                   <Sparkles size={12} />
@@ -230,7 +230,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   setPatternsDirty(true);
                 }}
                 placeholder={`# 跨项目模式\n\n- 反复观察到的偏好...\n- 多次纠正过的方向...`}
-                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-indigo-300 focus:bg-white"
+                className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-accent-border focus:bg-white"
               />
             </div>
           )}

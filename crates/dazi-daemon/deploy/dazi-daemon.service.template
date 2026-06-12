@@ -1,0 +1,24 @@
+# dazi-daemon systemd 用户服务模板（Linux）。
+# 占位符 __DAEMON_BIN__ / __WORKDIR__ / __PATH__ 由 install-daemon-linux.sh 替换。
+# 用户级服务（systemctl --user），随用户会话启动，不需 root、不改系统全局。
+[Unit]
+Description=Dazi daemon (常驻大脑：调度 + 手机远程 + 审批执行)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=__DAEMON_BIN__
+WorkingDirectory=__WORKDIR__
+# systemd 启动的进程 PATH 极简，拿不到 npm global / ~/.local/bin。
+# daemon 内部跑 claude 时用 bash -lc 能拿回 PATH，这里再显式补一层兜底。
+Environment=PATH=__PATH__
+# 崩溃自动重拉，最短间隔 10s，避免疯狂重启。
+Restart=always
+RestartSec=10
+# stdout/stderr 进 journald，看日志：journalctl --user -u dazi-daemon -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

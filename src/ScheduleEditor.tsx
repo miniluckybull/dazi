@@ -191,7 +191,7 @@ export function ScheduleConfigModal({
                 onClick={() => setTaskType(t.value)}
                 className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition ${
                   active
-                    ? "border-indigo-500/70 bg-indigo-50 text-indigo-700"
+                    ? "border-accent/70 bg-accent-soft text-accent-text"
                     : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
                 }`}
                 title={t.hint}
@@ -282,8 +282,8 @@ export function ScheduleConfigModal({
                 disabled={saving}
                 className={`rounded px-2 py-0.5 text-[11px] transition ${
                   paused
-                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                    : "bg-amber-500 text-white hover:bg-amber-600"
+                    ? "bg-emerald-500 text-on-accent hover:bg-emerald-600"
+                    : "bg-amber-500 text-on-accent hover:bg-amber-600"
                 } disabled:opacity-60`}
               >
                 {paused ? "恢复" : "暂停"}
@@ -300,7 +300,7 @@ export function ScheduleConfigModal({
                 onClick={() => setTriggerAction("notify")}
                 className={`flex-1 rounded border px-2 py-1.5 transition ${
                   triggerAction === "notify"
-                    ? "border-indigo-500/70 bg-indigo-50 text-indigo-700"
+                    ? "border-accent/70 bg-accent-soft text-accent-text"
                     : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
                 }`}
               >
@@ -348,7 +348,7 @@ export function ScheduleConfigModal({
             <button
               onClick={() => save(true)}
               disabled={saving || (triggerAction === "autopilot" && taskType !== "oneoff" && !riskAck)}
-              className="rounded border border-indigo-500/70 bg-indigo-600/90 px-3 py-1 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600 disabled:opacity-60"
+              className="rounded border border-accent/70 bg-accent/90 px-3 py-1 text-on-accent shadow-sm shadow-accent/30 hover:bg-accent disabled:opacity-60"
             >
               {saving ? "保存中…" : "保存"}
             </button>

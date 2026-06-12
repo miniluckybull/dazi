@@ -21,34 +21,40 @@ fn model_of(path: &std::path::Path) -> Option<String> {
         .and_then(|t| t.model)
 }
 
+/// 为某项目以 plan 模式产出执行计划，登记为待批并推 approval-requested。
+/// claude plan 模式只读、不执行，安全。供 HTTP handler 与 scheduler tick 复用。
+/// scheduler 在 blocking 上下文调用，故拆成同步函数（内部不 await）。
+pub fn request_plan(state: &AppState, slug: &str) -> Result<Approval, String> {
+    let path = find_project_path(slug).map_err(|(_, j)| j.0.error)?;
+    let name = project::read_meta(&path)
+        .map(|m| m.name)
+        .unwrap_or_else(|_| slug.to_string());
+    let model = model_of(&path);
+    let plan_prompt = prompt::build_plan_prompt(&path);
+
+    let outcome = autopilot::run_plan(&path, &plan_prompt, model.as_deref())?;
+
+    let approval = state.approvals.create(slug, &name, &outcome.summary);
+    state.events.emit(DaziEvent::ApprovalRequested {
+        slug: slug.to_string(),
+        name,
+        approval_id: approval.id.clone(),
+        plan: outcome.summary,
+    });
+    Ok(approval)
+}
+
 /// 以 plan 模式为某项目产出执行计划，登记为待批并推 approval-requested。
 /// claude plan 模式只读、不执行，安全。
 pub async fn create_plan(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> ApiResult<Approval> {
-    let path = find_project_path(&slug)?;
-    let name = project::read_meta(&path)
-        .map(|m| m.name)
-        .unwrap_or_else(|_| slug.clone());
-    let model = model_of(&path);
-    let plan_prompt = prompt::build_plan_prompt(&path);
-
     // claude 调用是阻塞且耗时的，放到 blocking 线程池。
-    let outcome = tokio::task::spawn_blocking(move || {
-        autopilot::run_plan(&path, &plan_prompt, model.as_deref())
-    })
-    .await
-    .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, format!("计划任务失败: {e}")))?
-    .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
-
-    let approval = state.approvals.create(&slug, &name, &outcome.summary);
-    state.events.emit(DaziEvent::ApprovalRequested {
-        slug: slug.clone(),
-        name,
-        approval_id: approval.id.clone(),
-        plan: outcome.summary,
-    });
+    let approval = tokio::task::spawn_blocking(move || request_plan(&state, &slug))
+        .await
+        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, format!("计划任务失败: {e}")))?
+        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(approval))
 }
 

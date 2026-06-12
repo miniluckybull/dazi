@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import MDEditor from "@uiw/react-md-editor";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -8,16 +7,22 @@ import {
   Brain,
   ArchiveRestore,
   Sparkles,
-  MessageCircle,
+  Send,
   Zap,
   Clock,
   Repeat,
   ChevronDown,
-  PlayCircle,
+  Bot,
+  SquareTerminal,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
 import { MemoryPanel } from "./MemoryPanel";
+import { ActivityPanel } from "./ActivityPanel";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { TerminalView } from "./terminal/TerminalView";
+import { requestLaunch } from "./terminal/manager";
+import { invoke } from "@tauri-apps/api/core";
 
 function MemoryBadge({
   layers,
@@ -45,7 +50,7 @@ function MemoryBadge({
   return (
     <span
       title={`启动 dazi 时会注入：\n${tip}`}
-      className="flex items-center gap-1 rounded-md border border-indigo-300/70 bg-indigo-50/80 px-2 py-1 text-[10px] font-medium text-indigo-700"
+      className="flex items-center gap-1 rounded-md border border-accent-border/70 bg-accent-soft/80 px-2 py-1 text-[10px] font-medium text-accent-text"
     >
       <Brain size={11} />
       记忆 {count}/3
@@ -74,11 +79,11 @@ function IconButton({
   if (disabled) {
     cls = `${base} cursor-not-allowed border-white/40 bg-white/30 text-gray-300`;
   } else if (tone === "orange") {
-    cls = `${base} border-amber-500/70 bg-amber-500/90 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500`;
+    cls = `${base} border-amber-500/70 bg-amber-500/90 text-on-accent shadow-sm shadow-amber-500/30 hover:bg-amber-500`;
   } else if (tone === "blue") {
-    cls = `${base} border-sky-500/70 bg-sky-600/90 text-white shadow-sm shadow-sky-500/30 hover:bg-sky-600`;
+    cls = `${base} border-sky-500/70 bg-sky-600/90 text-on-accent shadow-sm shadow-sky-500/30 hover:bg-sky-600`;
   } else if (emphasis) {
-    cls = `${base} border-indigo-500/70 bg-indigo-600/90 text-white shadow-sm shadow-indigo-500/30 hover:bg-indigo-600`;
+    cls = `${base} border-accent/70 bg-accent/90 text-on-accent shadow-sm shadow-accent/30 hover:bg-accent`;
   } else {
     cls = `${base} border-white/60 bg-white/70 text-gray-600 backdrop-blur hover:bg-white hover:text-gray-900`;
   }
@@ -117,13 +122,15 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const readPatterns = useApp((s) => s.readPatterns);
   const readProjectJournal = useApp((s) => s.readProjectJournal);
   const readProjectContext = useApp((s) => s.readProjectContext);
+  const attention = useApp((s) => (project ? !!s.attention[project.slug] : false));
 
   const [readme, setReadme] = useState<string>("");
+  const [readmeLoadedSlug, setReadmeLoadedSlug] = useState<string | null>(null);
   const [savingReadme, setSavingReadme] = useState(false);
   const [readmeDirty, setReadmeDirty] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [tab, setTab] = useState<"readme" | "memory">("readme");
+  const [tab, setTab] = useState<"readme" | "terminal" | "activity" | "memory">("readme");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [autopiloting, setAutopiloting] = useState(false);
   const [memoryLayers, setMemoryLayers] = useState({
@@ -168,7 +175,13 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     if (!project) return;
     if (project.handed_off_at) {
       // 继续上次会话
-      await continueWithClaude(project.path);
+      const mode = await invoke<string>("get_terminal_mode").catch(() => "embedded");
+      if (mode === "external") {
+        await continueWithClaude(project.path);
+      } else {
+        await requestLaunch(project.slug, project.path, "continue");
+        setTab("terminal");
+      }
       return;
     }
     const refsHint = project.has_references
@@ -181,7 +194,14 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
       { title: "启动 dazi", kind: "info" }
     );
     if (!ok) return;
-    await handOffToClaude(project.path);
+    const mode = await invoke<string>("get_terminal_mode").catch(() => "embedded");
+    if (mode === "external") {
+      await handOffToClaude(project.path);
+    } else {
+      await requestLaunch(project.slug, project.path, "handoff");
+      setTab("terminal");
+      await refreshProjects();
+    }
   }
 
   async function callAutopilotNow() {
@@ -200,16 +220,26 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   }
 
   useEffect(() => {
+    // 归档任务不显示终端 Tab，切到归档项目时回落 README
+    if (project?.archived && tab === "terminal") setTab("readme");
+  }, [project, tab]);
+
+  useEffect(() => {
     if (!project) {
       setReadme("");
+      setReadmeLoadedSlug(null);
       lastLoadedSlug.current = null;
       return;
     }
     if (lastLoadedSlug.current === project.slug) return;
     lastLoadedSlug.current = project.slug;
     setReadmeDirty(false);
+    setReadmeLoadedSlug(null);
     readReadme(project.path)
-      .then((r) => setReadme(r))
+      .then((r) => {
+        setReadme(r);
+        setReadmeLoadedSlug(project.slug);
+      })
       .catch(() => {});
   }, [project, readReadme]);
 
@@ -355,7 +385,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                     title={autopiloting ? "自动执行中…" : "立即自动执行一次"}
                     onClick={callAutopilotNow}
                   >
-                    <PlayCircle
+                    <Bot
                       size={15}
                       className={autopiloting ? "animate-pulse text-amber-600" : ""}
                     />
@@ -375,7 +405,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                   onClick={callClaude}
                   tone={claudeTone}
                 >
-                  <MessageCircle size={15} />
+                  <Send size={15} />
                 </IconButton>
               </>
             )}
@@ -387,17 +417,46 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
           onClick={() => setTab("readme")}
           className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
             tab === "readme"
-              ? "border-indigo-500 font-medium text-gray-800"
+              ? "border-accent font-medium text-gray-800"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           README
         </button>
+        {!project.archived && (
+          <button
+            onClick={() => setTab("terminal")}
+            className={`relative -mb-px flex items-center gap-1 border-b-2 px-3 py-1.5 transition ${
+              tab === "terminal"
+                ? "border-accent font-medium text-gray-800"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <SquareTerminal size={12} />
+            终端
+            {attention && tab !== "terminal" && (
+              <span
+                title="Claude 正在等待确认"
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+              />
+            )}
+          </button>
+        )}
+        <button
+          onClick={() => setTab("activity")}
+          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+            tab === "activity"
+              ? "border-accent font-medium text-gray-800"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          活动
+        </button>
         <button
           onClick={() => setTab("memory")}
           className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
             tab === "memory"
-              ? "border-indigo-500 font-medium text-gray-800"
+              ? "border-accent font-medium text-gray-800"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
@@ -406,20 +465,30 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
       </div>
       <div className="flex flex-1 overflow-hidden">
         {tab === "readme" ? (
-          <section className="flex-1 overflow-y-auto bg-white/70 backdrop-blur-sm">
-            <div data-color-mode="light" className="h-full">
-              <MDEditor
-                value={readme}
-                onChange={(v) => {
-                  setReadme(v ?? "");
-                  setReadmeDirty(true);
-                }}
-                height="100%"
-                preview="edit"
-                visibleDragbar={false}
-                extraCommands={[]}
-              />
+          <section className="flex flex-1 flex-col overflow-hidden bg-white/70 backdrop-blur-sm">
+            <div className="shrink-0 border-b border-white/60 px-4 py-1 text-[11px] text-gray-400">
+              选中文字可加粗/标题/列表 · 输入 / 插入块 · 拖动 ⠿ 排序
             </div>
+            <div className="flex-1 overflow-y-auto">
+              {readmeLoadedSlug === project.slug && (
+                <MarkdownEditor
+                  key={project.slug}
+                  defaultValue={readme}
+                  onChange={(v) => {
+                    setReadme(v);
+                    setReadmeDirty(true);
+                  }}
+                />
+              )}
+            </div>
+          </section>
+        ) : tab === "terminal" && !project.archived ? (
+          <section className="flex-1 overflow-hidden bg-white">
+            <TerminalView slug={project.slug} cwd={project.path} />
+          </section>
+        ) : tab === "activity" ? (
+          <section className="flex-1 overflow-hidden">
+            <ActivityPanel project={project} />
           </section>
         ) : (
           <section className="flex-1 overflow-hidden">
@@ -428,8 +497,8 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
         )}
       </div>
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-indigo-500/10 backdrop-blur-[2px]">
-          <div className="rounded-xl border-2 border-dashed border-indigo-400 bg-white/85 px-6 py-4 text-sm font-medium text-indigo-700 shadow-glass-lg">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-accent/10 backdrop-blur-[2px]">
+          <div className="rounded-xl border-2 border-dashed border-accent/60 bg-white/85 px-6 py-4 text-sm font-medium text-accent-text shadow-glass-lg">
             松开以将文件复制到 references/
           </div>
         </div>

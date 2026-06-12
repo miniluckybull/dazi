@@ -5,6 +5,39 @@ let token = localStorage.getItem(TOKEN_KEY);
 let ws = null;
 let currentView = null; // 记住当前视图，收到事件时刷新
 
+// ---- 主题：三态 light/dark/system，与桌面端 dazi_theme 语义一致 ----
+const THEME_KEY = "dazi_theme";
+const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+function themePref() {
+  const v = localStorage.getItem(THEME_KEY);
+  return v === "light" || v === "dark" ? v : "system";
+}
+function themeIcon(pref) {
+  return pref === "light" ? "\u2600\uFE0E" : pref === "dark" ? "\u263D" : "\u25D1";
+}
+function applyTheme() {
+  const pref = themePref();
+  const dark = pref === "dark" || (pref === "system" && themeMedia.matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const btn = document.getElementById("themeBtn");
+  if (btn) btn.textContent = themeIcon(pref);
+}
+function cycleTheme() {
+  const order = ["light", "dark", "system"];
+  const next = order[(order.indexOf(themePref()) + 1) % order.length];
+  if (next === "system") localStorage.removeItem(THEME_KEY);
+  else localStorage.setItem(THEME_KEY, next);
+  applyTheme();
+}
+themeMedia.addEventListener("change", () => {
+  if (themePref() === "system") applyTheme();
+});
+// header 随视图重渲染，用事件委托保证按钮始终可用
+app.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "themeBtn") cycleTheme();
+});
+applyTheme();
+
 async function api(path) {
   return apiSend(path, "GET");
 }
@@ -35,7 +68,8 @@ function esc(s) {
 
 function header(title, back) {
   const b = back ? `<button id="back">‹ 返回</button>` : "";
-  return `<header>${b}<h1>${esc(title)}</h1><button id="refresh">刷新</button></header>`;
+  const t = `<button id="themeBtn" title="切换外观（浅色/深色/跟随系统）">${themeIcon(themePref())}</button>`;
+  return `<header>${b}<h1>${esc(title)}</h1>${t}<button id="refresh">刷新</button></header>`;
 }
 
 function typeLabel(t) {

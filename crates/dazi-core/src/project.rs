@@ -103,6 +103,8 @@ pub struct ProjectSummary {
     pub archived: bool,
     pub task_type: String,
     pub next_run_at: Option<DateTime<Utc>>,
+    pub last_run_ok: Option<bool>,
+    pub last_run_at: Option<DateTime<Utc>>,
 }
 
 const README_TEMPLATE: &str = "# {{name}}\n\n\
@@ -242,6 +244,98 @@ pub fn create_project_with(
         archived: false,
         task_type: meta.task_type,
         next_run_at: meta.next_run_at,
+        last_run_ok: None,
+        last_run_at: None,
+    })
+}
+
+/// 关联已有本地文件夹为任务：在 source 内写 meta.yml（缺 README 时补空文件），
+/// 并在 workspace/projects/ 下创建指向 source 的符号链接。
+/// 不创建 references/notes/output，避免污染已有项目目录。
+pub fn create_project_from_path(
+    workspace: &Path,
+    source: &Path,
+) -> Result<ProjectSummary, String> {
+    if !source.is_dir() {
+        return Err(format!("不是文件夹: {}", source.display()));
+    }
+    let source = source
+        .canonicalize()
+        .map_err(|e| format!("解析路径失败: {e}"))?;
+    let workspace_canon = workspace
+        .canonicalize()
+        .map_err(|e| format!("解析工作区失败: {e}"))?;
+    if source.starts_with(&workspace_canon) {
+        return Err("该文件夹已在工作区内，请直接在列表中使用".into());
+    }
+    if source.join("meta.yml").exists() {
+        return Err("该文件夹已关联过任务（存在 meta.yml）".into());
+    }
+    ensure_workspace_layout(workspace)?;
+
+    let name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".to_string());
+    let parent = projects_dir(workspace);
+    let archive = archive_dir(workspace);
+    // slug 在 projects/ 与 archive/ 双查重
+    let base = sanitize_dir_name(&name);
+    let base = if base.is_empty() { "project".to_string() } else { base };
+    let mut slug = base.clone();
+    if parent.join(&slug).exists() || archive.join(&slug).exists() {
+        slug = (2..1000)
+            .map(|n| format!("{base}-{n}"))
+            .find(|c| !parent.join(c).exists() && !archive.join(c).exists())
+            .unwrap_or_else(|| format!("{base}-{}", Utc::now().timestamp()));
+    }
+
+    let now = Utc::now();
+    let meta = ProjectMeta {
+        slug: slug.clone(),
+        name,
+        status: default_status(),
+        priority: default_priority(),
+        tags: vec![],
+        start_date: None,
+        due_date: None,
+        requires_references: false,
+        handed_off_at: None,
+        created_at: now,
+        updated_at: now,
+        task_type: default_task_type(),
+        schedule: None,
+        on_trigger: None,
+        runs: vec![],
+        next_run_at: None,
+    };
+    write_meta(&source, &meta)?;
+
+    let readme = source.join("README.md");
+    if !readme.exists() {
+        std::fs::write(&readme, "").map_err(|e| e.to_string())?;
+    }
+
+    let link = parent.join(&slug);
+    std::os::unix::fs::symlink(&source, &link)
+        .map_err(|e| format!("创建符号链接失败: {e}"))?;
+
+    Ok(ProjectSummary {
+        slug: meta.slug,
+        name: meta.name,
+        status: meta.status,
+        priority: meta.priority,
+        path: link,
+        created_at: meta.created_at,
+        updated_at: meta.updated_at,
+        requires_references: false,
+        has_references: references_non_empty(&source),
+        handed_off_at: None,
+        archived: false,
+        task_type: meta.task_type,
+        next_run_at: None,
+        last_run_ok: None,
+        last_run_at: None,
     })
 }
 
@@ -278,6 +372,7 @@ fn list_in_dir(parent: &Path, archived: bool) -> Result<Vec<ProjectSummary>, Str
         match read_meta(&path) {
             Ok(meta) => {
                 let has_references = references_non_empty(&path);
+                let last_run = meta.runs.last();
                 out.push(ProjectSummary {
                     slug: meta.slug,
                     name: meta.name,
@@ -292,6 +387,8 @@ fn list_in_dir(parent: &Path, archived: bool) -> Result<Vec<ProjectSummary>, Str
                     archived,
                     task_type: meta.task_type,
                     next_run_at: meta.next_run_at,
+                    last_run_ok: last_run.map(|r| r.ok),
+                    last_run_at: last_run.map(|r| r.at),
                 });
             }
             Err(_) => continue,
