@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dazi</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
 <style>
   /* ============================================================
      设计令牌（与桌面端 tailwind.config.js 的 accent 系 / src/App.css 渐变同源）
@@ -208,6 +211,30 @@
   }
   .risk { font-size: 13px; color: var(--c-warn); background: var(--c-warn-bg); padding: 10px; border-radius: var(--radius-md); }
   .hidden { display: none; }
+
+  /* ============================================================
+     交互式终端视图：全屏 xterm + 底部虚拟功能键（手机软键盘缺 Ctrl/Esc/方向键）
+     ============================================================ */
+  .term-wrap { display: flex; flex-direction: column; height: 100dvh;
+    padding: env(safe-area-inset-top) 0 0; background: #1e1e1e; }
+  .term-wrap header { background: #1e1e1e; border-bottom: 1px solid #333; }
+  .term-wrap header h1, .term-wrap header button { color: #ddd; }
+  .term-host { flex: 1; min-height: 0; padding: 4px 6px; overflow: hidden; }
+  .term-host .xterm { height: 100%; }
+  .term-keys { display: flex; gap: 4px; padding: 6px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    background: #252526; border-top: 1px solid #333; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; }
+  .term-keys button { flex: 0 0 auto; min-width: 40px; padding: 9px 11px;
+    font: 13px/1 var(--font-mono); color: #ddd; background: #3a3a3c;
+    border: 1px solid #4a4a4c; border-radius: var(--radius-sm); cursor: pointer; }
+  .term-keys button:active { background: #555; }
+  .term-keys button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .term-launch { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .term-launch button { width: 100%; padding: 12px; font-size: 14px;
+    border-radius: var(--radius-md); cursor: pointer; border: 1px solid var(--line);
+    background: var(--panel-solid); color: var(--text); }
+  .term-launch button.btn-primary { background: var(--accent); color: #fff; border: none; }
   .detail-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
   .detail-actions button {
     width: 100%; padding: 12px; font-size: 14px; border-radius: var(--radius-md); cursor: pointer;

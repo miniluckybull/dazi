@@ -17,6 +17,7 @@ pub struct AppState {
     pub auth: Arc<Auth>,
     pub events: crate::ws::WsSink,
     pub approvals: Arc<crate::approval::ApprovalStore>,
+    pub ptys: Arc<crate::pty::PtyManager>,
 }
 
 /// 统一错误：把 dazi-core 的 String 错误映射为 500 + JSON。

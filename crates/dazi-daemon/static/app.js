@@ -257,12 +257,13 @@ async function renderDetail(slug) {
         <button data-t="readme" class="${tab === "readme" ? "active" : ""}">README</button>
         <button data-t="journal" class="${tab === "journal" ? "active" : ""}">日志</button>
         <button data-t="context" class="${tab === "context" ? "active" : ""}">上下文</button>
-      </div><div id="tabbody"></div><div class="detail-actions">${planBtn}${schedBtn}</div>`;
+      </div><div id="tabbody"></div><div class="detail-actions">${planBtn}<button id="term" class="btn-primary">在终端中打开</button>${schedBtn}</div>`;
       m.querySelectorAll(".tabs button").forEach((b) => {
         b.onclick = () => { tab = b.dataset.t; load(); };
       });
       const pb = document.getElementById("plan");
       if (pb) pb.onclick = () => startPlan(slug);
+      document.getElementById("term").onclick = () => renderTermLaunch(slug, meta.name, !!meta.handed_off_at);
       document.getElementById("sched").onclick = () => renderSchedule(slug);
       const tb = document.getElementById("tabbody");
       const data = await api("/projects/" + encodeURIComponent(slug) + "/" + tab);
@@ -461,6 +462,176 @@ async function renderMemory() {
     };
   };
   await load();
+}
+
+// ---- 交互式终端 ----
+// 启动方式：与 PC 端一致的单按钮智能切换——未交接过显示「交接给 Claude」（注入
+// 项目上下文），已交接过显示「继续上次会话」（claude -c，不重注入）。纯 shell 弱化为次要入口。
+function renderTermLaunch(slug, name, handedOff) {
+  currentView = null; // 静态页，WS 事件不触发重渲染
+  const mainBtn = handedOff
+    ? `<button class="btn-primary" data-l="continue">继续上次 Claude 会话</button>`
+    : `<button class="btn-primary" data-l="handoff">交接给 Claude（注入项目上下文）</button>`;
+  const hint = handedOff
+    ? "已交接过，继续上次对话不会重新注入上下文。"
+    : "首次交接会把项目上下文注入给 Claude。";
+  app.innerHTML = header("打开终端", true) + `<main id="m">
+    <p class="fld">为「${esc(name)}」开一个终端会话。与电脑端是各自独立的 shell，但会话历史按项目共享，可异步接力。</p>
+    <p class="fld" style="color:var(--text-faint)">${hint}</p>
+    <div class="term-launch">
+      ${mainBtn}
+      <button data-l="shell" style="opacity:.7">纯终端 Shell（不启动 Claude）</button>
+    </div></main>`;
+  document.getElementById("back").onclick = () => renderDetail(slug);
+  document.querySelectorAll("[data-l]").forEach((b) => {
+    b.onclick = () => renderTerminal(slug, name, b.dataset.l);
+  });
+}
+
+// 终端主体：全屏 xterm + 双向 WebSocket + 虚拟功能键。
+let termState = null; // { term, ws, closed } —— 离开视图时清理
+function renderTerminal(slug, name, launch) {
+  currentView = null; // 终端是有状态视图，绝不能被 WS 事件重渲染清掉
+  cleanupTerm();
+  app.innerHTML = `<div class="term-wrap">
+    ${header(name, true)}
+    <div class="term-host" id="thost"></div>
+    <div class="term-keys" id="tkeys"></div>
+  </div>`;
+  document.getElementById("back").onclick = () => { cleanupTerm(); renderDetail(slug); };
+  document.getElementById("refresh").onclick = () => renderTerminal(slug, name, "shell");
+  // header 里追加「结束会话」按钮：明确 kill PTY+claude，跨端接力前的清理操作。
+  const endBtn = document.createElement("button");
+  endBtn.textContent = "结束会话";
+  endBtn.style.color = "var(--c-err)";
+  endBtn.onclick = () => endTermSession(slug);
+  document.querySelector(".term-wrap header").insertBefore(
+    endBtn, document.getElementById("refresh"));
+
+  const term = new Terminal({
+    fontSize: 13, fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+    cursorBlink: true, scrollback: 5000,
+    theme: { background: "#1e1e1e", foreground: "#d4d4d4", cursor: "#7c3aed" },
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById("thost"));
+  requestAnimationFrame(() => { try { fit.fit(); } catch {} term.focus(); });
+
+  const state = { term, ws: null, closed: false };
+  termState = state;
+
+  const connect = () => {
+    if (state.closed) return;
+    fit.fit();
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const qs = `token=${encodeURIComponent(token)}&launch=${launch}` +
+      `&cols=${term.cols}&rows=${term.rows}`;
+    const ws = new WebSocket(
+      `${proto}://${location.host}/api/v1/projects/${encodeURIComponent(slug)}/terminal?${qs}`);
+    state.ws = ws;
+    ws.onmessage = (ev) => {
+      let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.type === "output") term.write(msg.data);
+      else if (msg.type === "exit")
+        term.write("\r\n\x1b[2m[会话已结束]\x1b[0m\r\n");
+    };
+    ws.onclose = () => {
+      state.ws = null;
+      if (!state.closed) {
+        term.write("\r\n\x1b[33m[连接断开，3 秒后重连…]\x1b[0m\r\n");
+        setTimeout(connect, 3000);
+      }
+    };
+    ws.onerror = () => { try { ws.close(); } catch {} };
+  };
+  connect();
+
+  // 用户输入 → WS。重连后 launch 仅首次生效，后续复用同一 PTY。
+  term.onData((data) => {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN)
+      state.ws.send(JSON.stringify({ type: "input", data }));
+  });
+
+  // resize：fit 后把新尺寸告知服务端。
+  const sendResize = () => {
+    try { fit.fit(); } catch { return; }
+    if (state.ws && state.ws.readyState === WebSocket.OPEN)
+      state.ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+  };
+  state.onResize = sendResize;
+  window.addEventListener("resize", sendResize);
+
+  renderTermKeys(state);
+}
+
+// 离开终端视图时：标记关闭、断 WS、卸 resize 监听、销毁 xterm 实例。
+function cleanupTerm() {
+  const s = termState;
+  if (!s) return;
+  termState = null;
+  s.closed = true;
+  if (s.onResize) window.removeEventListener("resize", s.onResize);
+  if (s.ws) { try { s.ws.close(); } catch {} }
+  try { s.term.dispose(); } catch {}
+}
+
+// 结束会话：明确 kill 掉 daemon 侧 PTY（连同里面的 claude），然后回详情页。
+// 跨端接力前用它清理，避免两端 claude 同时读写同一会话历史。
+async function endTermSession(slug) {
+  if (!confirm("结束会话会关闭终端里正在运行的 Claude/命令。确定？")) return;
+  cleanupTerm(); // 先断本地 WS，避免断开重连提示
+  try {
+    await apiSend("/projects/" + encodeURIComponent(slug) + "/terminal", "DELETE");
+    banner("会话已结束");
+  } catch (e) { banner("结束失败：" + e.message); }
+  renderDetail(slug);
+}
+
+// 虚拟功能键条：手机软键盘缺这些键，claude 交互菜单要用方向键/Esc/回车。
+// Ctrl 为粘滞修饰键：点亮后下一个字母键发对应控制字符。
+function renderTermKeys(state) {
+  const keys = document.getElementById("tkeys");
+  // [标签, 直接发送的字节] —— ctrl 特殊处理
+  const defs = [
+    ["esc", "\x1b"], ["tab", "\t"], ["ctrl", null],
+    ["↑", "\x1b[A"], ["↓", "\x1b[B"], ["←", "\x1b[D"], ["→", "\x1b[C"],
+    ["⏎", "\r"], ["⌫", "\x7f"],
+  ];
+  keys.innerHTML = defs.map(([label]) =>
+    `<button data-k="${esc(label)}">${esc(label)}</button>`).join("");
+  let ctrl = false;
+  const send = (d) => {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN)
+      state.ws.send(JSON.stringify({ type: "input", data: d }));
+    state.term.focus();
+  };
+  keys.querySelectorAll("button").forEach((b, i) => {
+    const seq = defs[i][1];
+    b.onclick = () => {
+      const label = defs[i][0];
+      if (label === "ctrl") {
+        ctrl = !ctrl;
+        b.classList.toggle("on", ctrl);
+        state.term.focus();
+        return;
+      }
+      send(seq);
+    };
+  });
+  // Ctrl 粘滞：捕获下一个普通字符键，转成控制字符（如 Ctrl+C=\x03）。
+  state.term.attachCustomKeyEventHandler((e) => {
+    if (!ctrl || e.type !== "keydown") return true;
+    const k = e.key.toLowerCase();
+    if (k.length === 1 && k >= "a" && k <= "z") {
+      send(String.fromCharCode(k.charCodeAt(0) - 96));
+      ctrl = false;
+      const cb = keys.querySelector('[data-k="ctrl"]');
+      if (cb) cb.classList.remove("on");
+      return false; // 拦截，避免 xterm 再发原字符
+    }
+    return true;
+  });
 }
 
 // ---- 入口 ----

@@ -5,6 +5,7 @@ mod auth;
 mod http;
 mod http_approval;
 mod http_write;
+mod pty;
 mod scheduler;
 mod ws;
 
@@ -13,7 +14,7 @@ use axum::{
     http::{header, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use std::sync::Arc;
@@ -35,6 +36,7 @@ async fn main() {
         auth: auth.clone(),
         events: ws::WsSink::new(),
         approvals: Arc::new(approval::ApprovalStore::new()),
+        ptys: Arc::new(pty::PtyManager::default()),
     };
 
     // 公开端点：Web 页静态资源、健康检查与配对（配对靠 PIN，不需要 token）。
@@ -44,11 +46,19 @@ async fn main() {
         .route("/app.js", get(http::app_js))
         .route("/health", get(http::health))
         .route("/api/v1/pair", post(http::pair))
-        .route("/api/v1/events", get(ws::ws_handler));
+        .route("/api/v1/events", get(ws::ws_handler))
+        .route(
+            "/api/v1/projects/:slug/terminal",
+            get(pty::ws_terminal_handler),
+        );
 
     // 受保护端点：需 Bearer device_token。
     let protected = Router::new()
         .route("/api/v1/config", get(http::get_config))
+        .route(
+            "/api/v1/projects/:slug/terminal",
+            delete(pty::kill_terminal),
+        )
         .route(
             "/api/v1/projects",
             get(http::list_projects).post(http_write::create_project),
@@ -115,7 +125,16 @@ async fn main() {
     // notify 任务推 TaskTriggered。让纯服务器部署也能自动推进定时任务。
     scheduler::spawn(state.clone());
 
-    axum::serve(listener, app).await.expect("服务异常退出");
+    // Ctrl-C 优雅退出：杀掉全部 PTY 子进程，避免孤儿 shell/claude 进程。
+    let ptys = state.ptys.clone();
+    let shutdown = async move {
+        let _ = tokio::signal::ctrl_c().await;
+        ptys.kill_all();
+    };
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await
+        .expect("服务异常退出");
 }
 
 /// Bearer token 鉴权中间件。
