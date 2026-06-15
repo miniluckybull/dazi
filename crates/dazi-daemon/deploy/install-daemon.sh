@@ -3,7 +3,7 @@
 # 用户级，不需 sudo。装完 daemon 在后台常驻，配合 Tailscale 即可随时手机远程。
 set -euo pipefail
 
-REPO="/Users/wxw/wxw_workspace/dazi"
+REPO="/Users/wxw/Projects/dazi"
 LABEL="com.wxw.dazi-daemon"
 PLIST_DIR="$HOME/Library/LaunchAgents"
 PLIST="$PLIST_DIR/$LABEL.plist"
