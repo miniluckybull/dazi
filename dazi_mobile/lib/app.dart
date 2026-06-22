@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class DaziApp extends StatelessWidget {
+import 'router.dart';
+import 'theme.dart';
+
+class DaziApp extends ConsumerWidget {
   const DaziApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
       title: 'Dazi',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF7C3AED)),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7C3AED),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: const Scaffold(
-        body: Center(child: Text('Dazi Mobile')),
-      ),
+      theme: DaziTheme.light(),
+      darkTheme: DaziTheme.dark(),
+      themeMode: ThemeMode.system,
+      routerConfig: router,
     );
   }
 }
