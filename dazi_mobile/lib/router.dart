@@ -7,6 +7,7 @@ import 'screens/memory_screen.dart';
 import 'screens/pair_screen.dart';
 import 'screens/project_detail_screen.dart';
 import 'screens/projects_screen.dart';
+import 'screens/schedule_screen.dart';
 import 'screens/shell_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -42,6 +43,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => ProjectDetailScreen(
                       slug: state.pathParameters['slug']!,
                     ),
+                    routes: [
+                      GoRoute(
+                        path: 'schedule',
+                        builder: (context, state) => ScheduleScreen(
+                          slug: state.pathParameters['slug']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

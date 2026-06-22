@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../widgets/terminal_view.dart';
 
@@ -14,6 +15,12 @@ class ProjectDetailScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(slug),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.schedule),
+              onPressed: () => context.push('/projects/$slug/schedule'),
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'README'),
