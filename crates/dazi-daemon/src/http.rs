@@ -89,6 +89,38 @@ pub async fn app_js() -> axum::response::Response {
         .into_response()
 }
 
+pub async fn manifest() -> impl IntoResponse {
+    use axum::http::header;
+    (
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        include_str!("../static/manifest.json"),
+    )
+}
+
+pub async fn service_worker() -> axum::response::Response {
+    use axum::http::header;
+    (
+        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../static/service-worker.js"),
+    )
+        .into_response()
+}
+
+pub async fn icon(Path(path): Path<String>) -> impl IntoResponse {
+    use axum::http::header;
+    let bytes: &'static [u8] = match path.as_str() {
+        "icon-192x192.png" => include_bytes!("../static/icons/icon-192x192.png"),
+        "icon-512x512.png" => include_bytes!("../static/icons/icon-512x512.png"),
+        "apple-touch-icon.png" => include_bytes!("../static/icons/apple-touch-icon.png"),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    (
+        [(header::CONTENT_TYPE, "image/png")],
+        bytes,
+    )
+        .into_response()
+}
+
 pub async fn get_config() -> ApiResult<config::AppConfig> {
     config::load()
         .map(Json)
