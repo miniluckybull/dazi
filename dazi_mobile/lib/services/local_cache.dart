@@ -3,19 +3,22 @@ import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 
 class LocalCacheService {
-  late Box<String> _box;
+  Box<String>? _box;
 
-  Future<void> init() async {
-    await Hive.initFlutter();
+  Future<Box<String>> _ensureBox() async {
+    if (_box != null) return _box!;
     _box = await Hive.openBox<String>('dazi_cache');
+    return _box!;
   }
 
   Future<void> setJson(String key, dynamic value) async {
-    await _box.put(key, jsonEncode(value));
+    final box = await _ensureBox();
+    await box.put(key, jsonEncode(value));
   }
 
-  dynamic getJson(String key) {
-    final raw = _box.get(key);
+  Future<dynamic> getJson(String key) async {
+    final box = await _ensureBox();
+    final raw = box.get(key);
     if (raw == null) return null;
     try {
       return jsonDecode(raw);
@@ -24,7 +27,13 @@ class LocalCacheService {
     }
   }
 
-  Future<void> delete(String key) => _box.delete(key);
+  Future<void> delete(String key) async {
+    final box = await _ensureBox();
+    await box.delete(key);
+  }
 
-  Future<void> clear() => _box.clear();
+  Future<void> clear() async {
+    final box = await _ensureBox();
+    await box.clear();
+  }
 }

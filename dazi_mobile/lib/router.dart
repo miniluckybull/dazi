@@ -5,6 +5,7 @@ import 'providers/auth_provider.dart';
 import 'screens/approvals_screen.dart';
 import 'screens/memory_screen.dart';
 import 'screens/pair_screen.dart';
+import 'screens/project_detail_screen.dart';
 import 'screens/projects_screen.dart';
 import 'screens/shell_screen.dart';
 
@@ -35,6 +36,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/projects',
                 builder: (context, state) => const ProjectsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':slug',
+                    builder: (context, state) => ProjectDetailScreen(
+                      slug: state.pathParameters['slug']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
