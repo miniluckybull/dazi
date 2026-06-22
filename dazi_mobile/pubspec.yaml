@@ -1,0 +1,66 @@
+name: dazi_mobile
+description: Dazi native mobile app for iOS and Android.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.0
+  riverpod_annotation: ^2.3.0
+
+  # Network
+  dio: ^5.5.0
+  web_socket_channel: ^3.0.0
+
+  # Storage
+  flutter_secure_storage: ^10.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Terminal
+  xterm: ^3.2.6
+
+  # QR scanning
+  mobile_scanner: ^6.0.0
+  permission_handler: ^11.3.1
+
+  # Markdown
+  flutter_markdown_plus: ^1.0.3
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # Notifications
+  awesome_notifications: ^0.10.0
+
+  # Biometrics
+  local_auth: ^2.1.8
+
+  # Utilities
+  intl: ^0.19.0
+  freezed_annotation: ^2.4.0
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.0
+  riverpod_generator: ^2.4.0
+  hive_generator: ^2.0.0
+  freezed: ^2.5.0
+  json_serializable: ^6.8.0
+  go_router_builder: ^2.7.0
+
+flutter:
+  uses-material-design: true
