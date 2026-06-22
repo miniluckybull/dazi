@@ -489,7 +489,13 @@ function renderTermLaunch(slug, name, handedOff) {
 }
 
 // 终端主体：全屏 xterm + 双向 WebSocket + 虚拟功能键。
-let termState = null; // { term, ws, closed } —— 离开视图时清理
+let termState = null; // { term, ws, closed, onResize, onOnline } —— 离开视图时清理
+let termOutputQueue = [];       // 输出批量缓冲
+let termOutputRaf = null;       // requestAnimationFrame id
+let termInputBuf = "";          // 输入合并缓冲
+let termInputTimer = null;      // 输入合并定时器
+let termReconnectDelay = 1000;  // 当前重连退避（ms）
+const TERM_MAX_RECONNECT_DELAY = 30000;
 function renderTerminal(slug, name, launch) {
   currentView = null; // 终端是有状态视图，绝不能被 WS 事件重渲染清掉
   cleanupTerm();
@@ -516,10 +522,74 @@ function renderTerminal(slug, name, launch) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(document.getElementById("thost"));
+
+  // 手势滚动：在终端显示区上下滑动滚动 xterm.js 回滚缓冲区。
+  // 垂直位移超过阈值且大于水平位移时判定为滚动；否则把事件留给 xterm 处理选择/点击。
+  const host = document.getElementById("thost");
+  let touchStartY = 0, touchStartX = 0, touchStartTime = 0, isTermScrolling = false;
+  const TERM_SCROLL_THRESHOLD_PX = 10;
+  const TERM_SCROLL_LINES_PER_PX = 1 / 18;
+
+  host.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+    touchStartTime = Date.now();
+    isTermScrolling = false;
+  }, { passive: true });
+
+  host.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 1) return;
+    const dy = touchStartY - e.touches[0].clientY;
+    const dx = touchStartX - e.touches[0].clientX;
+
+    if (!isTermScrolling) {
+      if (Math.abs(dy) > TERM_SCROLL_THRESHOLD_PX && Math.abs(dy) > Math.abs(dx) * 1.5) {
+        isTermScrolling = true;
+      } else {
+        return; // 让 xterm 处理选择/点击
+      }
+    }
+
+    e.preventDefault();
+    const lines = Math.round(dy * TERM_SCROLL_LINES_PER_PX);
+    if (lines !== 0) {
+      term.scrollLines(lines);
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: false });
+
+  host.addEventListener("touchend", (e) => {
+    const elapsed = Date.now() - touchStartTime;
+    if (!isTermScrolling && elapsed < 300) {
+      term.focus();
+    }
+    isTermScrolling = false;
+  }, { passive: true });
+
   requestAnimationFrame(() => { try { fit.fit(); } catch {} term.focus(); });
 
   const state = { term, ws: null, closed: false };
   termState = state;
+
+  // 输出批量：通过 requestAnimationFrame 把一帧内到达的 PTY 输出合并写入，
+  // 避免高输出频率下 xterm.js 逐字符重绘。
+  function flushTermOutput() {
+    termOutputRaf = null;
+    if (termOutputQueue.length === 0) return;
+    const data = termOutputQueue.join("");
+    termOutputQueue.length = 0;
+    term.write(data);
+  }
+
+  // 输入合并：单字符输入攒 8ms 一次性发，多字符（粘贴/转义）立即发。
+  function flushTermInput() {
+    termInputTimer = null;
+    if (termInputBuf.length && state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: "input", data: termInputBuf }));
+    }
+    termInputBuf = "";
+  }
 
   const connect = () => {
     if (state.closed) return;
@@ -530,27 +600,62 @@ function renderTerminal(slug, name, launch) {
     const ws = new WebSocket(
       `${proto}://${location.host}/api/v1/projects/${encodeURIComponent(slug)}/terminal?${qs}`);
     state.ws = ws;
+
+    ws.onopen = () => {
+      termReconnectDelay = 1000;
+    };
+
     ws.onmessage = (ev) => {
       let msg; try { msg = JSON.parse(ev.data); } catch { return; }
-      if (msg.type === "output") term.write(msg.data);
-      else if (msg.type === "exit")
+      if (msg.type === "output") {
+        termOutputQueue.push(msg.data);
+        if (!termOutputRaf) termOutputRaf = requestAnimationFrame(flushTermOutput);
+      } else if (msg.type === "exit") {
+        if (termOutputRaf) { cancelAnimationFrame(termOutputRaf); termOutputRaf = null; }
+        flushTermOutput();
         term.write("\r\n\x1b[2m[会话已结束]\x1b[0m\r\n");
-    };
-    ws.onclose = () => {
-      state.ws = null;
-      if (!state.closed) {
-        term.write("\r\n\x1b[33m[连接断开，3 秒后重连…]\x1b[0m\r\n");
-        setTimeout(connect, 3000);
       }
     };
+
+    ws.onclose = () => {
+      state.ws = null;
+      if (termOutputRaf) { cancelAnimationFrame(termOutputRaf); termOutputRaf = null; }
+      flushTermOutput();
+      if (!state.closed) {
+        const delaySec = Math.round(termReconnectDelay / 1000);
+        term.write(`\r\n\x1b[33m[连接断开，${delaySec} 秒后重连…]\x1b[0m\r\n`);
+        setTimeout(() => {
+          termReconnectDelay = Math.min(termReconnectDelay * 2, TERM_MAX_RECONNECT_DELAY);
+          connect();
+        }, termReconnectDelay);
+      }
+    };
+
     ws.onerror = () => { try { ws.close(); } catch {} };
   };
   connect();
 
+  // 网络恢复时立即重连。
+  const onOnline = () => {
+    if (!state.closed && !state.ws) {
+      termReconnectDelay = 1000;
+      connect();
+    }
+  };
+  window.addEventListener("online", onOnline);
+  state.onOnline = onOnline;
+
   // 用户输入 → WS。重连后 launch 仅首次生效，后续复用同一 PTY。
   term.onData((data) => {
-    if (state.ws && state.ws.readyState === WebSocket.OPEN)
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    if (data.length > 1) {
+      // 粘贴或功能键序列：立即发送，并清空已缓冲的单字符。
+      if (termInputTimer) { clearTimeout(termInputTimer); flushTermInput(); }
       state.ws.send(JSON.stringify({ type: "input", data }));
+    } else {
+      termInputBuf += data;
+      if (!termInputTimer) termInputTimer = setTimeout(flushTermInput, 8);
+    }
   });
 
   // resize：fit 后把新尺寸告知服务端。
@@ -565,14 +670,23 @@ function renderTerminal(slug, name, launch) {
   renderTermKeys(state);
 }
 
-// 离开终端视图时：标记关闭、断 WS、卸 resize 监听、销毁 xterm 实例。
+// 离开终端视图时：标记关闭、断 WS、卸监听、清缓冲、销毁 xterm 实例。
 function cleanupTerm() {
   const s = termState;
   if (!s) return;
   termState = null;
   s.closed = true;
   if (s.onResize) window.removeEventListener("resize", s.onResize);
+  if (s.onOnline) window.removeEventListener("online", s.onOnline);
   if (s.ws) { try { s.ws.close(); } catch {} }
+  if (termInputTimer) { clearTimeout(termInputTimer); termInputTimer = null; }
+  if (termOutputRaf) { cancelAnimationFrame(termOutputRaf); termOutputRaf = null; }
+  if (termOutputQueue.length) {
+    try { s.term.write(termOutputQueue.join("")); } catch {}
+    termOutputQueue.length = 0;
+  }
+  termInputBuf = "";
+  termReconnectDelay = 1000;
   try { s.term.dispose(); } catch {}
 }
 

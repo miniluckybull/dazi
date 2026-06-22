@@ -21,6 +21,7 @@ use futures::{SinkExt, StreamExt};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use tokio::time::{interval_at, Duration, Instant, MissedTickBehavior};
 
 use crate::http::{find_project_path, AppState};
 
@@ -58,7 +59,8 @@ struct PtySession {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     scrollback: Mutex<Vec<u8>>,
     /// 当前连接的输出通道；重连时整体替换。reader 线程通过它推字节。
-    out_tx: Mutex<Option<mpsc::UnboundedSender<ServerMsg>>>,
+    /// 使用有界通道施加背压，避免极端输出下无限制堆积。
+    out_tx: Mutex<Option<mpsc::Sender<ServerMsg>>>,
     alive: AtomicBool,
 }
 
@@ -254,7 +256,9 @@ fn ensure_session(
                     let text = drain_valid_utf8(&mut pending);
                     if !text.is_empty() {
                         if let Some(tx) = sess.out_tx.lock().unwrap().as_ref() {
-                            let _ = tx.send(ServerMsg::Output { data: text });
+                            // 有界通道满时丢弃旧帧，避免内存无限增长；
+                            // 正常批量发送下不应出现丢弃。
+                            let _ = tx.blocking_send(ServerMsg::Output { data: text });
                         }
                     }
                 }
@@ -263,11 +267,16 @@ fn ensure_session(
         let _ = child.wait(); // 回收子进程，避免僵尸
         sess.alive.store(false, Ordering::SeqCst);
         if let Some(tx) = sess.out_tx.lock().unwrap().as_ref() {
-            let _ = tx.send(ServerMsg::Exit);
+            let _ = tx.blocking_send(ServerMsg::Exit);
         }
     });
 
     Ok(session)
+}
+
+/// 控制 send_task 的辅助消息。
+enum CtrlMsg {
+    SendPing,
 }
 
 /// 单个 WebSocket 连接的完整生命周期：建桥、回放、收发循环、断开保活。
@@ -290,57 +299,127 @@ async fn handle_terminal(
     };
 
     // 建 mpsc 桥，装入 session（重连时整体替换，前一个连接的 sender 被丢弃）。
-    let (tx, mut rx) = mpsc::unbounded_channel::<ServerMsg>();
+    let (tx, mut rx) = mpsc::channel::<ServerMsg>(256);
     {
         let replay = String::from_utf8_lossy(&session.scrollback.lock().unwrap()).into_owned();
         if !replay.is_empty() {
-            let _ = tx.send(ServerMsg::Output { data: replay });
+            let _ = tx.send(ServerMsg::Output { data: replay }).await;
         }
-        *session.out_tx.lock().unwrap() = Some(tx);
+        *session.out_tx.lock().unwrap() = Some(tx.clone());
     }
 
     let (mut ws_sink, mut ws_stream) = socket.split();
+    let (ctrl_tx, mut ctrl_rx) = mpsc::channel::<CtrlMsg>(4);
 
-    // 出向：mpsc → ws。
+    // 出向：mpsc → ws，带批量缓冲（4KB 阈值 / 16ms 截止）与 ping 响应。
     let send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            let json = match serde_json::to_string(&msg) {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
-            if ws_sink.send(Message::Text(json)).await.is_err() {
-                break;
+        let mut batch = String::new();
+        let mut deadline = interval_at(
+            Instant::now() + Duration::from_millis(16),
+            Duration::from_millis(16),
+        );
+        deadline.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            tokio::select! {
+                Some(msg) = rx.recv() => {
+                    match msg {
+                        ServerMsg::Output { data } => {
+                            batch.push_str(&data);
+                            if batch.len() >= 4096 {
+                                if let Ok(json) = serde_json::to_string(&ServerMsg::Output {
+                                    data: std::mem::take(&mut batch),
+                                }) {
+                                    if ws_sink.send(Message::Text(json)).await.is_err() { break; }
+                                }
+                            }
+                        }
+                        ServerMsg::Exit => {
+                            if !batch.is_empty() {
+                                if let Ok(json) = serde_json::to_string(&ServerMsg::Output {
+                                    data: std::mem::take(&mut batch),
+                                }) {
+                                    let _ = ws_sink.send(Message::Text(json)).await;
+                                }
+                            }
+                            if let Ok(json) = serde_json::to_string(&ServerMsg::Exit) {
+                                if ws_sink.send(Message::Text(json)).await.is_err() { break; }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                Some(ctrl) = ctrl_rx.recv() => {
+                    match ctrl {
+                        CtrlMsg::SendPing => {
+                            if ws_sink.send(Message::Ping(vec![])).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ = deadline.tick() => {
+                    if !batch.is_empty() {
+                        if let Ok(json) = serde_json::to_string(&ServerMsg::Output {
+                            data: std::mem::take(&mut batch),
+                        }) {
+                            if ws_sink.send(Message::Text(json)).await.is_err() { break; }
+                        }
+                    }
+                }
             }
         }
     });
 
-    // 入向：ws → PTY。写入量小，阻塞 Mutex 直接锁即可。
-    while let Some(Ok(frame)) = ws_stream.next().await {
-        match frame {
-            Message::Text(t) => match serde_json::from_str::<ClientMsg>(&t) {
-                Ok(ClientMsg::Input { data }) => {
-                    if let Ok(mut w) = session.writer.lock() {
-                        let _ = w.write_all(data.as_bytes());
-                    }
+    // 入向：ws → PTY。写入量小，阻塞 Mutex 直接锁即可；同时维持心跳。
+    let mut ping_interval = interval_at(
+        Instant::now() + Duration::from_secs(15),
+        Duration::from_secs(15),
+    );
+    ping_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut last_pong = Instant::now();
+
+    loop {
+        tokio::select! {
+            Some(Ok(frame)) = ws_stream.next() => {
+                match frame {
+                    Message::Pong(_) => last_pong = Instant::now(),
+                    Message::Text(t) => match serde_json::from_str::<ClientMsg>(&t) {
+                        Ok(ClientMsg::Input { data }) => {
+                            if let Ok(mut w) = session.writer.lock() {
+                                let _ = w.write_all(data.as_bytes());
+                            }
+                        }
+                        Ok(ClientMsg::Resize { cols, rows }) => {
+                            if let Ok(m) = session.master.lock() {
+                                let _ = m.resize(PtySize {
+                                    rows,
+                                    cols,
+                                    pixel_width: 0,
+                                    pixel_height: 0,
+                                });
+                            }
+                        }
+                        Err(_) => {}
+                    },
+                    Message::Close(_) => break,
+                    _ => {}
                 }
-                Ok(ClientMsg::Resize { cols, rows }) => {
-                    if let Ok(m) = session.master.lock() {
-                        let _ = m.resize(PtySize {
-                            rows,
-                            cols,
-                            pixel_width: 0,
-                            pixel_height: 0,
-                        });
-                    }
+            }
+            _ = ping_interval.tick() => {
+                if last_pong.elapsed() > Duration::from_secs(30) {
+                    break;
                 }
-                Err(_) => {}
-            },
-            Message::Close(_) => break,
-            _ => {}
+                if ctrl_tx.send(CtrlMsg::SendPing).await.is_err() {
+                    break;
+                }
+            }
         }
     }
 
     // ws 入向断开：收掉出向 task，清空 out_tx；PTY 保活，scrollback 续累积，等重连。
+    drop(ctrl_tx);
     send_task.abort();
     let mut guard = session.out_tx.lock().unwrap();
     *guard = None;
