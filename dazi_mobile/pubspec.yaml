@@ -27,7 +27,7 @@ dependencies:
   hive_flutter: ^1.1.0
 
   # Terminal
-  xterm: ^3.2.6
+  xterm: ^4.0.0
 
   # QR scanning
   mobile_scanner: ^6.0.0

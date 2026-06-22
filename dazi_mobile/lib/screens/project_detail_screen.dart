@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/terminal_view.dart';
+
 class ProjectDetailScreen extends StatelessWidget {
   const ProjectDetailScreen({super.key, required this.slug});
 
@@ -7,9 +9,25 @@ class ProjectDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(slug)),
-      body: Center(child: Text('项目详情: $slug')),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(slug),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'README'),
+              Tab(text: '终端'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            const Center(child: Text('README')),
+            DaziTerminalView(slug: slug),
+          ],
+        ),
+      ),
     );
   }
 }
