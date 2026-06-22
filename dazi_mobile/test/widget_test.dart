@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:dazi_mobile/api/dazi_api.dart';
 import 'package:dazi_mobile/app.dart';
 import 'package:dazi_mobile/providers/auth_provider.dart';
+import 'package:dazi_mobile/providers/core_providers.dart';
 import 'package:dazi_mobile/providers/projects_provider.dart';
 
 void main() {

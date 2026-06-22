@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/dazi_api.dart';
 import '../models/models.dart';
 import '../services/local_cache.dart';
+import 'core_providers.dart';
 import 'events_provider.dart';
-
-final localCacheProvider = Provider<LocalCacheService>((ref) => LocalCacheService());
 
 class ProjectsNotifier extends StateNotifier<AsyncValue<List<ProjectSummary>>> {
   ProjectsNotifier(this._api, this._cache) : super(const AsyncValue.loading());
