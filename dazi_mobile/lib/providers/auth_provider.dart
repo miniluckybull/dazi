@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/dazi_api.dart';
 import '../constants.dart';
 import '../services/secure_storage.dart';
 
@@ -48,10 +50,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
-  Future<void> savePairing({required String baseUrl, required String token}) async {
-    await _storage.write(StorageKeys.baseUrl, baseUrl);
-    await _storage.write(StorageKeys.deviceToken, token);
-    state = AuthState(token: token, baseUrl: baseUrl, isLoading: false);
+  Future<void> pair({required String baseUrl, required String pin}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await DaziApi(
+        Dio(), // temporary unauthenticated dio
+      ).pair(baseUrl: baseUrl, pin: pin, deviceName: 'Dazi Mobile');
+      await _storage.write(StorageKeys.baseUrl, baseUrl);
+      await _storage.write(StorageKeys.deviceToken, result.deviceToken);
+      state = AuthState(
+        token: result.deviceToken,
+        baseUrl: baseUrl,
+        isLoading: false,
+      );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
   }
 
   Future<void> logout() async {
