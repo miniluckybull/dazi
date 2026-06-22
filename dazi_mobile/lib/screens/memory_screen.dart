@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/dazi_api.dart';
+import '../providers/auth_provider.dart';
 
 final memoryProvider = FutureProvider.family<String, String>((ref, name) async {
   final api = ref.watch(daziApiProvider);
@@ -61,6 +62,12 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('记忆'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => ref.read(authProvider.notifier).logout(),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,

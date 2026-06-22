@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../providers/auth_provider.dart';
 import '../providers/projects_provider.dart';
+import '../widgets/connection_badge.dart';
 import '../widgets/project_card.dart';
 
 class ProjectsScreen extends ConsumerWidget {
@@ -16,11 +16,12 @@ class ProjectsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('项目'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: ConnectionBadge(),
           ),
+          SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
