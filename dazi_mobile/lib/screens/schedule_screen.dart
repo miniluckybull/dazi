@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/dazi_api.dart';
-import '../models/project_meta.dart';
 import '../models/schedule.dart' as schedule_models;
-
-final projectMetaProvider = FutureProvider.family<ProjectMeta, String>((ref, slug) async {
-  final api = ref.watch(daziApiProvider);
-  return api.getProjectMeta(slug);
-});
+import '../providers/project_meta_provider.dart';
 
 class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key, required this.slug});
