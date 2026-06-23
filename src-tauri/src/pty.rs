@@ -133,25 +133,26 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch) -> Result<CommandBuilder, Str
 
     #[cfg(windows)]
     {
-        // Windows 用 PowerShell：-NoExit 让命令执行完后窗口保持，
-        // 单引号字符串语义与 Unix 相近，可复用 shell_single_quote 转义。
+        // Windows 用 cmd.exe：/K 执行命令后保持窗口。
+        // 先 chcp 65001 把代码页切到 UTF-8，避免中文乱码。
+        let claude = autopilot::resolve_claude_bin();
         match launch {
-            PtyLaunch::Shell => {}
+            PtyLaunch::Shell => {
+                cmd.arg("/K");
+                cmd.arg("chcp 65001 >nul");
+            }
             PtyLaunch::Handoff => {
                 let p = prompt::build_handoff_prompt(cwd);
-                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
-                let quoted = autopilot::shell_single_quote(&p);
-                cmd.arg("-NoExit");
-                cmd.arg("-Command");
+                // cmd.exe 双引号内把 \" 转义成 \\\"，换行替换为空格避免多行参数解析失败。
+                let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
+                cmd.arg("/K");
                 cmd.arg(format!(
-                    "{claude} -p {quoted} --output-format json --permission-mode bypassPermissions"
+                    "chcp 65001 >nul & \"{claude}\" -p \"{escaped}\" --output-format json --permission-mode bypassPermissions"
                 ));
             }
             PtyLaunch::Continue => {
-                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
-                cmd.arg("-NoExit");
-                cmd.arg("-Command");
-                cmd.arg(format!("{claude} -c"));
+                cmd.arg("/K");
+                cmd.arg(format!("chcp 65001 >nul & \"{claude}\" -c"));
             }
         }
     }
