@@ -109,23 +109,53 @@ fn append_scrollback(scrollback: &Mutex<Vec<u8>>, data: &[u8]) {
 fn build_command(cwd: &PathBuf, launch: PtyLaunch) -> Result<CommandBuilder, String> {
     let shell = autopilot::login_shell();
     let mut cmd = CommandBuilder::new(&shell);
-    match launch {
-        PtyLaunch::Shell => {
-            cmd.arg("-l");
-        }
-        PtyLaunch::Handoff => {
-            let p = prompt::build_handoff_prompt(cwd);
-            let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
-            let quoted = autopilot::shell_single_quote(&p);
-            cmd.arg("-lc");
-            cmd.arg(format!("{claude} {quoted}; exec {shell} -l"));
-        }
-        PtyLaunch::Continue => {
-            let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
-            cmd.arg("-lc");
-            cmd.arg(format!("{claude} -c; exec {shell} -l"));
+
+    #[cfg(unix)]
+    {
+        match launch {
+            PtyLaunch::Shell => {
+                cmd.arg("-l");
+            }
+            PtyLaunch::Handoff => {
+                let p = prompt::build_handoff_prompt(cwd);
+                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+                let quoted = autopilot::shell_single_quote(&p);
+                cmd.arg("-lc");
+                cmd.arg(format!("{claude} {quoted}; exec {shell} -l"));
+            }
+            PtyLaunch::Continue => {
+                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+                cmd.arg("-lc");
+                cmd.arg(format!("{claude} -c; exec {shell} -l"));
+            }
         }
     }
+
+    #[cfg(windows)]
+    {
+        // Windows 用 PowerShell：-NoExit 让命令执行完后窗口保持，
+        // 单引号字符串语义与 Unix 相近，可复用 shell_single_quote 转义。
+        match launch {
+            PtyLaunch::Shell => {}
+            PtyLaunch::Handoff => {
+                let p = prompt::build_handoff_prompt(cwd);
+                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+                let quoted = autopilot::shell_single_quote(&p);
+                cmd.arg("-NoExit");
+                cmd.arg("-Command");
+                cmd.arg(format!(
+                    "{claude} -p {quoted} --output-format json --permission-mode bypassPermissions"
+                ));
+            }
+            PtyLaunch::Continue => {
+                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+                cmd.arg("-NoExit");
+                cmd.arg("-Command");
+                cmd.arg(format!("{claude} -c"));
+            }
+        }
+    }
+
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
     cmd.env("LANG", "zh_CN.UTF-8");

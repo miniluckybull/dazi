@@ -44,13 +44,21 @@ pub fn resolve_claude_bin() -> String {
 /// 解析登录 shell：用 `<shell> -lc` 走登录态拿回 PATH 与 ~/.claude 凭证。
 /// macOS 默认 zsh、Linux 默认 bash，运行时探测以同一份代码两端可用。
 /// `-lc` 语法 zsh 与 bash 通用。
+/// Windows 上没有 Unix shell，回退到 PowerShell。
 pub fn login_shell() -> String {
-    for c in ["/bin/zsh", "/usr/bin/zsh", "/bin/bash", "/usr/bin/bash"] {
-        if Path::new(c).exists() {
-            return c.to_string();
-        }
+    #[cfg(windows)]
+    {
+        return "powershell.exe".to_string();
     }
-    "bash".to_string()
+    #[cfg(unix)]
+    {
+        for c in ["/bin/zsh", "/usr/bin/zsh", "/bin/bash", "/usr/bin/bash"] {
+            if Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+        "bash".to_string()
+    }
 }
 
 /// claude 探活：跑 `claude --version`（快、不耗 token、不需登录态），
