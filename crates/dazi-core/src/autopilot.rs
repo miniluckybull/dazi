@@ -21,7 +21,10 @@ const SUMMARY_MAX: usize = 600; // journal/run.message 截断长度
 /// 解析 claude 可执行文件路径。GUI app 从 Finder 启动 / systemd 启动时 PATH 精简，
 /// 拿不到 homebrew、npm global 等目录，所以显式探测常见位置，最后回退裸 "claude"。
 pub fn resolve_claude_bin() -> String {
-    if let Ok(home) = std::env::var("HOME") {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default();
+    if !home.is_empty() {
         let candidates = [
             format!("{home}/.claude/local/claude"),
             format!("{home}/.local/bin/claude"),

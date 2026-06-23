@@ -8,8 +8,9 @@ pub struct AppConfig {
 
 fn home_dir() -> Result<PathBuf, String> {
     std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
-        .map_err(|e| format!("无法读取 HOME 环境变量: {e}"))
+        .map_err(|e| format!("无法读取 HOME/USERPROFILE 环境变量: {e}"))
 }
 
 /// 配置文件固定在 ~/.dazi/config.json，与全局记忆同处一个目录，

@@ -5,8 +5,9 @@ const PROJECT_FILES: &[&str] = &["journal.md", "context.md"];
 
 fn home_dir() -> Result<PathBuf, String> {
     std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
         .map(PathBuf::from)
-        .map_err(|e| format!("无法读取 HOME 环境变量: {e}"))
+        .map_err(|e| format!("无法读取 HOME/USERPROFILE 环境变量: {e}"))
 }
 
 fn global_dir() -> Result<PathBuf, String> {
