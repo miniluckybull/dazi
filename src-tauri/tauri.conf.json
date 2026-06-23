@@ -39,8 +39,7 @@
     "windows": {
       "nsis": {
         "installMode": "both",
-        "installerIcon": "icons/icon.ico",
-        "installWebView2Mode": "downloadBootstrapper"
+        "installerIcon": "icons/icon.ico"
       }
     }
   }
