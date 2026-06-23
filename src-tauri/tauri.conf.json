@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis"],
+    "targets": "all",
     "category": "Productivity",
     "shortDescription": "本地任务文件夹管理 + Claude Code 一键交接",
     "longDescription": "Dazi 把每个任务变成一个本地文件夹，集中管理 README、参考资料与归档；一键把任务上下文交接给 Claude Code CLI。",
