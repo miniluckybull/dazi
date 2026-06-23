@@ -1,5 +1,6 @@
 // autopilot.rs — 无人值守 headless 运行 claude，把到期任务自动推进并回收结果。
 use std::io::Read;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -143,6 +144,7 @@ pub fn shell_single_quote(s: &str) -> String {
 
 /// 杀掉整个进程组（pgid 为 shell 组长的 pid）：先 TERM 给清理机会，再 KILL 兜底。
 /// `kill -<n> -<pgid>` 的负号表示把信号发给整个进程组。
+#[cfg(unix)]
 fn kill_group(pgid: u32) {
     let _ = Command::new("kill")
         .arg("-TERM")
@@ -153,6 +155,12 @@ fn kill_group(pgid: u32) {
         .arg("-KILL")
         .arg(format!("-{pgid}"))
         .status();
+}
+
+/// Windows 没有进程组概念，超时时直接杀掉子进程。
+#[cfg(windows)]
+fn kill_child(child: &mut std::process::Child) {
+    let _ = child.kill();
 }
 
 /// headless 运行 claude 执行 autopilot prompt（bypassPermissions，真正改文件/跑命令）。
@@ -198,18 +206,23 @@ fn run_claude(
         }
     }
 
-    let mut child = Command::new(login_shell())
-        .arg("-lc")
-        .arg(&inner)
-        .current_dir(project_path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        // 让 shell 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
+    let mut child = {
+        let mut cmd = Command::new(login_shell());
+        cmd.arg("-lc")
+            .arg(&inner)
+            .current_dir(project_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        // Unix：让 shell 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
         // 避免只杀 shell 而 claude 子进程变孤儿继续在后台改文件。
-        .process_group(0)
-        .spawn()
-        .map_err(|e| format!("启动 claude 失败: {e}"))?;
+        #[cfg(unix)]
+        {
+            cmd.process_group(0);
+        }
+        cmd.spawn()
+            .map_err(|e| format!("启动 claude 失败: {e}"))?
+    };
 
     // 后台线程持续抽干 stdout/stderr，避免管道写满（>64KB）导致 claude 阻塞、假超时。
     let mut out_pipe = child.stdout.take();
@@ -230,7 +243,8 @@ fn run_claude(
     });
 
     // 轮询 try_wait 实现硬超时，保持对 child 的所有权以便超时时 kill。
-    // pgid == shell 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
+    // Unix：pgid == shell 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
+    #[cfg(unix)]
     let pgid = child.id();
     let start = std::time::Instant::now();
     let timed_out = loop {
@@ -238,7 +252,10 @@ fn run_claude(
             Ok(Some(_status)) => break false,
             Ok(None) => {
                 if start.elapsed() >= Duration::from_secs(TIMEOUT_SECS) {
+                    #[cfg(unix)]
                     kill_group(pgid);
+                    #[cfg(windows)]
+                    kill_child(&mut child);
                     let _ = child.wait();
                     break true;
                 }

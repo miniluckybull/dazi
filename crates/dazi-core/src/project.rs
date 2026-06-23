@@ -2,6 +2,21 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// 跨平台创建符号链接。Windows 需要管理员权限或开启开发者模式。
+#[cfg(unix)]
+fn create_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(source, link)
+}
+
+#[cfg(windows)]
+fn create_symlink(source: &Path, link: &Path) -> std::io::Result<()> {
+    if source.is_dir() {
+        std::os::windows::fs::symlink_dir(source, link)
+    } else {
+        std::os::windows::fs::symlink_file(source, link)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectMeta {
     pub slug: String,
@@ -317,7 +332,7 @@ pub fn create_project_from_path(
     }
 
     let link = parent.join(&slug);
-    std::os::unix::fs::symlink(&source, &link)
+    create_symlink(&source, &link)
         .map_err(|e| format!("创建符号链接失败: {e}"))?;
 
     Ok(ProjectSummary {
