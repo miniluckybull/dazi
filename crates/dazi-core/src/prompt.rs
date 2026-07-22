@@ -167,7 +167,8 @@ fn writeback_convention(abs: &str) -> String {
          - 讨论了 …\n\
          - 决定 …\n\
          - 待办 …\n\n\
-         判断要点：信息「跟着用户走」(下个项目还要用) 写 facts/profile；信息「跟着这个项目走」写 context/journal。拿不准时优先写 facts，宁可全局也别困在某个项目里。"
+         判断要点：信息「跟着用户走」(下个项目还要用) 写 facts/profile；信息「跟着这个项目走」写 context/journal。拿不准时优先写 facts，宁可全局也别困在某个项目里。\n\n\
+         写入失败处理：若 Edit/Write 「{abs}/.dazi/context.md」时报 \"Error writing file\"，通常是 .dazi/ 目录缺失，先用 Bash 执行 `mkdir -p {abs}/.dazi` 再重试一次；仍失败则在 journal.md 末尾记下待确认，不要静默丢弃。"
     )
 }
 

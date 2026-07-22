@@ -72,7 +72,10 @@ export function setTerminalTheme(dark: boolean) {
 function createTerminal(): { term: Terminal; fit: FitAddon } {
   const term = new Terminal({
     fontSize: 13,
-    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+    // CJK 回退链：英文等宽优先，中文按平台回退到 PingFang SC / 微软雅黑 / Noto CJK，
+    // 避免 Windows WebView2 下找不到字体导致汉字渲染为乱码方框（反馈 #10）。
+    fontFamily:
+      'ui-monospace, "SF Mono", Menlo, Consolas, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", monospace',
     lineHeight: 1.25,
     scrollback: 5000,
     cursorBlink: true,
@@ -88,13 +91,20 @@ function createTerminal(): { term: Terminal; fit: FitAddon } {
 }
 
 function tryWebgl(term: Terminal) {
+  // Windows WebView2 下 WebGL 偶发 dirty rect 失效，导致汉字渲染乱码、框选后才恢复
+  // （反馈 #10，主要 Windows 用户）。macOS/Linux 无反馈，保持默认开启。
+  if (isWindows()) return;
   try {
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => webgl.dispose()); // 上下文丢失回退 DOM 渲染
     term.loadAddon(webgl);
   } catch {
-    // WKWebView 下 WebGL 不可用时静默回退 DOM renderer
+    // WKWebView / WebView2 下 WebGL 不可用时静默回退 DOM renderer
   }
+}
+
+function isWindows(): boolean {
+  return /Windows NT/i.test(navigator.userAgent);
 }
 
 async function openPty(s: TermSession, launch: PtyLaunch) {

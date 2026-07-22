@@ -330,6 +330,9 @@ pub fn create_project_from_path(
     if !readme.exists() {
         std::fs::write(&readme, "").map_err(|e| e.to_string())?;
     }
+    // 关联已有文件夹同样要初始化 .dazi/ 记忆目录，否则 Claude 通过 Write 工具
+    // 写 context.md / journal.md 时父目录不存在会直接报错（见反馈 #5）。
+    crate::memory::init_project_memory(&source)?;
 
     let link = parent.join(&slug);
     create_symlink(&source, &link)
@@ -717,6 +720,9 @@ pub fn unarchive_project(workspace: &Path, project_path: &Path) -> Result<PathBu
     }
     // 回到活动区时清掉归档时生成的 summary.md（如果还在）
     let _ = std::fs::remove_file(dest.join("summary.md"));
+    // 兜底：若归档期间 .dazi/ 记忆目录被外部删除，恢复到活动区时重新初始化，
+    // 保证 Claude 写 context.md / journal.md 不会因目录缺失而失败（反馈 #5）。
+    crate::memory::init_project_memory(&dest)?;
     bump_updated_at(&dest)?;
     Ok(dest)
 }
