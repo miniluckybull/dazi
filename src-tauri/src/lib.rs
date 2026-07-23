@@ -339,10 +339,14 @@ fn get_terminal_mode() -> Result<String, String> {
 fn escape_applescript(s: &str) -> String {
     // 反斜杠和双引号要转义；反引号和 $ 在 shell 双引号里会触发命令替换/变量展开,
     // 而我们最终把整段拼进 `claude "..."` 用 osascript do script 执行,所以一并转义掉。
+    // 换行必须转成空格：osascript 的双引号字符串不接受跨行字面换行，
+    // 否则 handoff prompt（含大量换行）会让 do script 命令断裂、claude 空启动等输入（反馈 #9）。
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
         .replace('`', "\\`")
         .replace('$', "\\$")
+        .replace('\n', " ")
+        .replace('\r', " ")
 }
 
 #[tauri::command]

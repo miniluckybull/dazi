@@ -106,7 +106,9 @@ fn append_scrollback(scrollback: &Mutex<Vec<u8>>, data: &[u8]) {
 
 /// 构造 pty 内运行的命令。Handoff/Continue 都在 claude 退出后 exec 回登录 shell，
 /// 保证会话不因 claude 结束而关闭。
-fn build_command(cwd: &PathBuf, launch: PtyLaunch) -> Result<CommandBuilder, String> {
+/// agent_mode：仅 Handoff 生效。true 时走非交互 `claude -p --permission-mode bypassPermissions`
+/// （跳过所有确认，等价 autopilot，复用已验证路径），false 时保持交互式 TUI（反馈 #1）。
+fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<CommandBuilder, String> {
     let shell = autopilot::login_shell();
     let mut cmd = CommandBuilder::new(&shell);
 
@@ -121,7 +123,13 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch) -> Result<CommandBuilder, Str
                 let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
                 let quoted = autopilot::shell_single_quote(&p);
                 cmd.arg("-lc");
-                cmd.arg(format!("{claude} {quoted}; exec {shell} -l"));
+                if agent_mode {
+                    cmd.arg(format!(
+                        "{claude} -p {quoted} --permission-mode bypassPermissions; exec {shell} -l"
+                    ));
+                } else {
+                    cmd.arg(format!("{claude} {quoted}; exec {shell} -l"));
+                }
             }
             PtyLaunch::Continue => {
                 let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
@@ -146,9 +154,15 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch) -> Result<CommandBuilder, Str
                 // cmd.exe 双引号内把 \" 转义成 \\\"，换行替换为空格避免多行参数解析失败。
                 let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
                 cmd.arg("/K");
-                cmd.arg(format!(
-                    "chcp 65001 >nul & \"{claude}\" -p \"{escaped}\" --output-format json --permission-mode bypassPermissions"
-                ));
+                // Windows 历史上一直走非交互 bypassPermissions（无频繁 yes 问题）；
+                // agent_mode 关闭时改为交互式 claude，与 unix 行为对齐。
+                if agent_mode {
+                    cmd.arg(format!(
+                        "chcp 65001 >nul & \"{claude}\" -p \"{escaped}\" --output-format json --permission-mode bypassPermissions"
+                    ));
+                } else {
+                    cmd.arg(format!("chcp 65001 >nul & \"{claude}\" \"{escaped}\""));
+                }
             }
             PtyLaunch::Continue => {
                 cmd.arg("/K");
@@ -171,6 +185,7 @@ pub fn pty_open(
     cols: u16,
     rows: u16,
     launch: PtyLaunch,
+    agent_mode: Option<bool>,
     on_event: Channel<PtyEvent>,
 ) -> Result<PtyOpenResult, String> {
     let mut sessions = state.sessions.lock().unwrap();
@@ -205,7 +220,7 @@ pub fn pty_open(
         })
         .map_err(|e| format!("openpty 失败: {e}"))?;
 
-    let cmd = build_command(&cwd, launch)?;
+    let cmd = build_command(&cwd, launch, agent_mode.unwrap_or(false))?;
     let mut child = pair
         .slave
         .spawn_command(cmd)
@@ -282,6 +297,7 @@ pub fn pty_launch(
     slug: String,
     cwd: PathBuf,
     launch: PtyLaunch,
+    agent_mode: Option<bool>,
 ) -> Result<bool, String> {
     if launch == PtyLaunch::Shell {
         return Ok(true);
@@ -299,10 +315,16 @@ pub fn pty_launch(
         return Ok(true);
     }
     let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+    let agent = agent_mode.unwrap_or(false);
     let line = match launch {
         PtyLaunch::Handoff => {
             let p = prompt::build_handoff_prompt(&cwd);
-            format!("{claude} {}\r", autopilot::shell_single_quote(&p))
+            let quoted = autopilot::shell_single_quote(&p);
+            if agent {
+                format!("{claude} -p {quoted} --permission-mode bypassPermissions\r")
+            } else {
+                format!("{claude} {quoted}\r")
+            }
         }
         PtyLaunch::Continue => format!("{claude} -c\r"),
         PtyLaunch::Shell => unreachable!(),

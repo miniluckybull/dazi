@@ -107,7 +107,7 @@ function isWindows(): boolean {
   return /Windows NT/i.test(navigator.userAgent);
 }
 
-async function openPty(s: TermSession, launch: PtyLaunch) {
+async function openPty(s: TermSession, launch: PtyLaunch, agentMode: boolean) {
   if (s.opening) return;
   s.opening = true;
   const channel = new Channel<PtyEvent>();
@@ -131,6 +131,7 @@ async function openPty(s: TermSession, launch: PtyLaunch) {
       cols: s.term.cols,
       rows: s.term.rows,
       launch,
+      agentMode,
       onEvent: channel,
     });
     s.alive = r.alive;
@@ -150,13 +151,14 @@ async function openPty(s: TermSession, launch: PtyLaunch) {
 export function ensureSession(
   slug: string,
   cwd: string,
-  launch: PtyLaunch = "shell"
+  launch: PtyLaunch = "shell",
+  agentMode = false
 ): TermSession {
   const existing = sessions.get(slug);
   if (existing) {
     if (!existing.alive && !existing.opening) {
       // 会话已死且用户带着 launch 意图回来：重新打开
-      void openPty(existing, launch);
+      void openPty(existing, launch, agentMode);
     }
     return existing;
   }
@@ -175,7 +177,7 @@ export function ensureSession(
       void invoke("pty_write", { slug, data });
     } else if (!s.opening && (data === "\r" || data === "\n")) {
       // dead 状态回车重开（纯 shell）
-      void openPty(s, "shell");
+      void openPty(s, "shell", false);
     }
   });
 
@@ -184,7 +186,7 @@ export function ensureSession(
     if (!s.host.isConnected) setAttention(slug, true);
   });
 
-  void openPty(s, launch);
+  void openPty(s, launch, agentMode);
   return s;
 }
 
@@ -193,10 +195,11 @@ export function ensureSession(
 export async function requestLaunch(
   slug: string,
   cwd: string,
-  launch: PtyLaunch
+  launch: PtyLaunch,
+  agentMode = false
 ): Promise<void> {
   try {
-    const handled = await invoke<boolean>("pty_launch", { slug, cwd, launch });
+    const handled = await invoke<boolean>("pty_launch", { slug, cwd, launch, agentMode });
     if (handled) {
       // 确保前端会话对象存在（已有 pty 时 ensureSession 仅复用）
       ensureSession(slug, cwd);
@@ -205,11 +208,19 @@ export async function requestLaunch(
   } catch {
     // pty_launch 失败时回落 spawn 路径
   }
-  ensureSession(slug, cwd, launch);
+  ensureSession(slug, cwd, launch, agentMode);
 }
 
 export function getSession(slug: string): TermSession | undefined {
   return sessions.get(slug);
+}
+
+/** 杀掉并清除一个任务的终端会话（后端 pty + 前端 map + DOM）。
+ *  用于「新建对话」强制重启 claude 重新注入记忆（反馈 #7）。 */
+export async function resetSession(slug: string) {
+  detach(slug);
+  await invoke("pty_kill", { slug }).catch(() => {});
+  sessions.delete(slug);
 }
 
 /** 把会话的常驻宿主挂到容器上并自适应尺寸。 */

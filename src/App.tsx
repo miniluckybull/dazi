@@ -34,10 +34,25 @@ function formatNext(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
 }
 
-function leftBorderColor(p: ProjectSummary): string {
+function leftBorderColor(p: ProjectSummary, attention: boolean): string {
   if (p.archived) return "border-l-gray-300/90";
+  // 待确认/中断态最醒目：红色边框
+  if (attention) return "border-l-red-500";
+  if (p.last_run_ok === false) return "border-l-red-400/90";
   if (p.handed_off_at) return "border-l-amber-400/90";
+  if (p.last_run_ok === true) return "border-l-emerald-400/90";
   return "border-l-sky-400/80";
+}
+
+/** 任务状态文案 + 颜色，用于卡片与详情页醒目提示（反馈 #2）。 */
+function taskStatus(p: ProjectSummary, attention: boolean): { label: string; cls: string } {
+  if (p.archived) return { label: "已归档", cls: "bg-gray-100 text-gray-500" };
+  if (attention) return { label: "待确认", cls: "bg-red-100 text-red-600 animate-pulse" };
+  if (p.last_run_ok === false) return { label: "已中断", cls: "bg-red-100 text-red-600" };
+  if (p.handed_off_at && p.last_run_ok !== true)
+    return { label: "进行中", cls: "bg-amber-100 text-amber-700" };
+  if (p.last_run_ok === true) return { label: "已完成", cls: "bg-emerald-100 text-emerald-700" };
+  return { label: "未启动", cls: "bg-sky-100 text-sky-600" };
 }
 
 function taskTypeBadgeIcon(t: TaskType, archived: boolean) {
@@ -283,12 +298,15 @@ function ProjectList({
         )}
         {items.map((p) => {
           const active = selectedSlug === p.slug;
+          const attn = !!attention[p.slug];
+          const status = taskStatus(p, attn);
           return (
           <div
             key={p.slug}
             onClick={() => selectProject(p.slug)}
             className={`group relative block w-full cursor-pointer border-b border-white/60 border-l-4 ${leftBorderColor(
-              p
+              p,
+              attn
             )} px-4 py-3 text-left transition ${
               active
                 ? "bg-accent-soft/90 shadow-inner ring-1 ring-inset ring-accent-border/70"
@@ -304,9 +322,14 @@ function ProjectList({
               </div>
             )}
             <div className="mt-1 flex items-center justify-between gap-2 pr-12">
-              <span className="text-[11px] text-gray-400">
-                创建于 {new Date(p.created_at).toLocaleDateString()}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-gray-400">
+                  创建于 {new Date(p.created_at).toLocaleDateString()}
+                </span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${status.cls}`}>
+                  {status.label}
+                </span>
+              </div>
               {p.requires_references && (
                 <button
                   onClick={(e) => openRefs(p, e)}
@@ -339,7 +362,7 @@ function ProjectList({
                 {attention[p.slug] ? (
                   <span
                     title="Claude 正在等待确认"
-                    className="absolute -bottom-0.5 -right-0.5 h-[7px] w-[7px] animate-pulse rounded-full border border-white bg-amber-500"
+                    className="absolute -right-1 -top-1 flex h-3.5 w-3.5 animate-pulse items-center justify-center rounded-full border-2 border-white bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.35)]"
                   />
                 ) : p.last_run_ok != null ? (
                   <span

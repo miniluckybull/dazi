@@ -123,6 +123,10 @@ interface AppState {
   /** 终端会话等待用户确认的任务（slug → true），由 terminal/manager 维护 */
   attention: Record<string, boolean>;
   setAttention: (slug: string, v: boolean) => void;
+  /** 代理模式：handoff 时走非交互 bypassPermissions，跳过逐条确认（反馈 #1）。
+   *  设备级偏好，持久化 localStorage。 */
+  agentMode: boolean;
+  setAgentMode: (v: boolean) => void;
   loadConfig: () => Promise<void>;
   setWorkspace: (path: string) => Promise<void>;
   refreshProjects: () => Promise<void>;
@@ -178,12 +182,18 @@ export const useApp = create<AppState>((set, get) => ({
   loading: false,
   error: null,
   attention: {},
+  agentMode: localStorage.getItem("dazi_agent_mode") === "1",
 
   setAttention: (slug, v) =>
     set((st) => {
       if (!!st.attention[slug] === v) return st;
       return { attention: { ...st.attention, [slug]: v } };
     }),
+
+  setAgentMode: (v) => {
+    localStorage.setItem("dazi_agent_mode", v ? "1" : "0");
+    set({ agentMode: v });
+  },
 
   loadConfig: async () => {
     try {

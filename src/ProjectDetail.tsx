@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Bot,
   SquareTerminal,
+  RefreshCw,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
@@ -21,7 +22,7 @@ import { MemoryPanel } from "./MemoryPanel";
 import { ActivityPanel } from "./ActivityPanel";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { TerminalView } from "./terminal/TerminalView";
-import { requestLaunch } from "./terminal/manager";
+import { requestLaunch, resetSession } from "./terminal/manager";
 import { invoke } from "@tauri-apps/api/core";
 
 function MemoryBadge({
@@ -106,6 +107,41 @@ function taskTypeLabel(t: TaskType) {
   return "一次性";
 }
 
+/** 代理模式开关：开启后启动 claude 协作走非交互 bypassPermissions，跳过逐条确认（反馈 #1）。 */
+function AgentModeToggle() {
+  const agentMode = useApp((s) => s.agentMode);
+  const setAgentMode = useApp((s) => s.setAgentMode);
+  return (
+    <button
+      onClick={() => setAgentMode(!agentMode)}
+      title={
+        agentMode
+          ? "代理模式已开启：启动协作时 Claude 跳过所有确认自动执行。点击关闭（恢复逐条确认）"
+          : "代理模式已关闭：启动协作时需逐条确认。点击开启（跳过所有确认，自动执行）"
+      }
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition ${
+        agentMode
+          ? "border-amber-400/70 bg-amber-50 text-amber-700"
+          : "border-white/60 bg-white/60 text-gray-500 hover:bg-white/80"
+      }`}
+    >
+      <Zap size={11} className={agentMode ? "text-amber-500" : "text-gray-400"} />
+      代理模式
+      <span
+        className={`relative h-3.5 w-6 rounded-full transition ${
+          agentMode ? "bg-amber-500" : "bg-gray-300"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all ${
+            agentMode ? "left-3" : "left-0.5"
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
 export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const readReadme = useApp((s) => s.readReadme);
   const writeReadme = useApp((s) => s.writeReadme);
@@ -133,6 +169,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [tab, setTab] = useState<"readme" | "terminal" | "activity" | "memory">("readme");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [autopiloting, setAutopiloting] = useState(false);
+  const [termVersion, setTermVersion] = useState(0);
   const [memoryLayers, setMemoryLayers] = useState({
     profile: false,
     patterns: false,
@@ -184,13 +221,17 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
       }
       return;
     }
+    const agent = useApp.getState().agentMode;
     const refsHint = project.has_references
       ? "已检测到 references/ 中的资料。"
       : project.requires_references
         ? "⚠ 此任务标记为「需要参考资料」，但 references/ 当前为空，启动后 Claude 可能信息不足。"
         : "references/ 当前为空，Claude 将仅基于 README.md 推进。";
+    const modeHint = agent
+      ? "\n⚡ 代理模式已开启：Claude 将跳过所有确认自动执行，请确保 README 任务清晰、无破坏性指令。"
+      : "";
     const ok = await ask(
-      `启动 dazi 协作？\n${refsHint}\n启动后 Claude 会基于 README.md 与 references/ 中的资料推进任务。`,
+      `启动 dazi 协作？\n${refsHint}${modeHint}\n启动后 Claude 会基于 README.md 与 references/ 中的资料推进任务。`,
       { title: "启动 dazi", kind: "info" }
     );
     if (!ok) return;
@@ -198,7 +239,29 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     if (mode === "external") {
       await handOffToClaude(project.path);
     } else {
-      await requestLaunch(project.slug, project.path, "handoff");
+      await requestLaunch(project.slug, project.path, "handoff", agent);
+      setTab("terminal");
+      await refreshProjects();
+    }
+  }
+
+  async function callNewChat() {
+    if (!project) return;
+    // clear 上下文后新建对话：强制重启 claude 重新注入协作记忆（profile/facts/patterns/context/journal），
+    // 解决 clear 后新对话丢失关键信息、不主动读记忆的问题（反馈 #7）。
+    const ok = await ask(
+      `新建对话并重新注入协作记忆？\n会重启 claude 并注入用户画像、世界事实、跨项目模式与本项目进展。适用于上下文 clear 后恢复。`,
+      { title: "新建对话", kind: "info" }
+    );
+    if (!ok) return;
+    const agent = useApp.getState().agentMode;
+    const mode = await invoke<string>("get_terminal_mode").catch(() => "embedded");
+    if (mode === "external") {
+      await handOffToClaude(project.path);
+    } else {
+      await resetSession(project.slug);
+      setTermVersion((v) => v + 1);
+      await requestLaunch(project.slug, project.path, "handoff", agent);
       setTab("terminal");
       await refreshProjects();
     }
@@ -332,6 +395,19 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     ? "继续 claude 协作（不重新注入 prompt）"
     : "启动 claude 协作";
 
+  // 任务状态徽章（反馈 #2）：待确认/已中断/进行中/已完成/未启动/已归档
+  const detailStatus = project.archived
+    ? { label: "已归档", cls: "bg-gray-100 text-gray-500" }
+    : attention
+      ? { label: "待确认", cls: "bg-red-100 text-red-600 animate-pulse" }
+      : project.last_run_ok === false
+        ? { label: "已中断", cls: "bg-red-100 text-red-600" }
+        : project.handed_off_at && project.last_run_ok !== true
+          ? { label: "进行中", cls: "bg-amber-100 text-amber-700" }
+          : project.last_run_ok === true
+            ? { label: "已完成", cls: "bg-emerald-100 text-emerald-700" }
+            : { label: "未启动", cls: "bg-sky-100 text-sky-600" };
+
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <header className="border-b border-white/60 bg-white/55 px-6 py-3 backdrop-blur-xl">
@@ -340,12 +416,20 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
             <h1 className="truncate text-lg font-semibold text-gray-900">
               {project.name}
             </h1>
-            <p
-              className="mt-0.5 truncate text-xs text-gray-500"
-              title={project.path}
-            >
-              {project.path}
-            </p>
+            <div className="mt-0.5 flex items-center gap-2">
+              <p
+                className="truncate text-xs text-gray-500"
+                title={project.path}
+              >
+                {project.path}
+              </p>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${detailStatus.cls}`}
+                title={detailStatus.label}
+              >
+                {detailStatus.label}
+              </span>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <span className="mr-1 text-[11px] text-gray-400">
@@ -407,61 +491,72 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                 >
                   <Send size={15} />
                 </IconButton>
+                {project.handed_off_at && (
+                  <IconButton
+                    title="新建对话（重启 claude 并重新注入协作记忆，用于 clear 后恢复）"
+                    onClick={callNewChat}
+                  >
+                    <RefreshCw size={15} />
+                  </IconButton>
+                )}
               </>
             )}
           </div>
         </div>
       </header>
-      <div className="flex border-b border-white/60 bg-white/45 px-4 text-xs backdrop-blur">
-        <button
-          onClick={() => setTab("readme")}
-          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
-            tab === "readme"
-              ? "border-accent font-medium text-gray-800"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          README
-        </button>
-        {!project.archived && (
+      <div className="flex items-center justify-between border-b border-white/60 bg-white/45 px-4 text-xs backdrop-blur">
+        <div className="flex">
           <button
-            onClick={() => setTab("terminal")}
-            className={`relative -mb-px flex items-center gap-1 border-b-2 px-3 py-1.5 transition ${
-              tab === "terminal"
+            onClick={() => setTab("readme")}
+            className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+              tab === "readme"
                 ? "border-accent font-medium text-gray-800"
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            <SquareTerminal size={12} />
-            终端
-            {attention && tab !== "terminal" && (
-              <span
-                title="Claude 正在等待确认"
-                className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
-              />
-            )}
+            README
           </button>
-        )}
-        <button
-          onClick={() => setTab("activity")}
-          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
-            tab === "activity"
-              ? "border-accent font-medium text-gray-800"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          活动
-        </button>
-        <button
-          onClick={() => setTab("memory")}
-          className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
-            tab === "memory"
-              ? "border-accent font-medium text-gray-800"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          协作记忆
-        </button>
+          {!project.archived && (
+            <button
+              onClick={() => setTab("terminal")}
+              className={`relative -mb-px flex items-center gap-1 border-b-2 px-3 py-1.5 transition ${
+                tab === "terminal"
+                  ? "border-accent font-medium text-gray-800"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <SquareTerminal size={12} />
+              终端
+              {attention && tab !== "terminal" && (
+                <span
+                  title="Claude 正在等待确认"
+                  className="h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.35)]"
+                />
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => setTab("activity")}
+            className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+              tab === "activity"
+                ? "border-accent font-medium text-gray-800"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            活动
+          </button>
+          <button
+            onClick={() => setTab("memory")}
+            className={`relative -mb-px border-b-2 px-3 py-1.5 transition ${
+              tab === "memory"
+                ? "border-accent font-medium text-gray-800"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            协作记忆
+          </button>
+        </div>
+        {!project.archived && <AgentModeToggle />}
       </div>
       <div className="flex flex-1 overflow-hidden">
         {tab === "readme" ? (
@@ -484,7 +579,7 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
           </section>
         ) : tab === "terminal" && !project.archived ? (
           <section className="flex-1 overflow-hidden bg-white">
-            <TerminalView slug={project.slug} cwd={project.path} />
+            <TerminalView key={`${project.slug}-${termVersion}`} slug={project.slug} cwd={project.path} />
           </section>
         ) : tab === "activity" ? (
           <section className="flex-1 overflow-hidden">
