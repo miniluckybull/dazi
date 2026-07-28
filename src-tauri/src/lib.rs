@@ -223,6 +223,18 @@ async fn test_model_config(
     dazi_core::model_test::test_config(&config).await
 }
 
+/// 读取指定月份（YYYY-MM）的 usage 记录（反馈 #16）。
+#[tauri::command]
+fn get_usage(month: String) -> dazi_core::usage::UsageMonth {
+    dazi_core::usage::read_month(&month).unwrap_or_default()
+}
+
+/// 列出已有 usage 记录的月份（倒序，YYYY-MM）。
+#[tauri::command]
+fn list_usage_months() -> Vec<String> {
+    dazi_core::usage::list_months().unwrap_or_default()
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -506,14 +518,14 @@ fn execute_autopilot(
     model: Option<String>,
 ) {
     let prompt = prompt::build_autopilot_prompt(project_path);
-    let (ok, message) = match autopilot::run_autopilot(project_path, &prompt, model.as_deref()) {
+    let (ok, message, usage_opt) = match autopilot::run_autopilot(project_path, &prompt, model.as_deref()) {
         Ok(outcome) => {
             let _ = autopilot::append_autopilot_journal(project_path, &outcome);
             let msg = match &outcome.session_id {
                 Some(sid) => format!("{}\n[session: {sid}]", outcome.summary),
                 None => outcome.summary.clone(),
             };
-            (outcome.ok, msg)
+            (outcome.ok, msg, outcome.usage)
         }
         Err(e) => {
             // 运行框架本身失败（启动/超时）也落一条 journal，方便排查。
@@ -524,11 +536,13 @@ fn execute_autopilot(
                 usage: None,
             };
             let _ = autopilot::append_autopilot_journal(project_path, &outcome);
-            (false, e)
+            (false, e, None)
         }
     };
 
     let _ = schedule::record_run(project_path, "autopilot", ok, Some(message.clone()));
+    // 落 usage（反馈 #16：token 消耗和费用监控）
+    let _ = dazi_core::usage::append_usage(project_path, model.as_deref(), usage_opt.as_ref());
 
     let title = if ok {
         format!("Dazi · {name} 自动执行完成")
@@ -563,6 +577,12 @@ fn run_autopilot_now(app: tauri::AppHandle, project_path: PathBuf) -> Result<boo
         None => outcome.summary.clone(),
     };
     let _ = schedule::record_run(&project_path, "autopilot", outcome.ok, Some(msg));
+    // 落 usage（反馈 #16：token 消耗和费用监控）
+    let _ = dazi_core::usage::append_usage(
+        &project_path,
+        model.as_deref(),
+        outcome.usage.as_ref(),
+    );
     let _ = app.emit("task-completed", serde_json::json!({
         "path": project_path.to_string_lossy(),
         "name": name,
@@ -665,6 +685,8 @@ pub fn run() {
             get_backend,
             set_backend,
             test_model_config,
+            get_usage,
+            list_usage_months,
             write_facts,
             read_project_journal,
             read_project_context,

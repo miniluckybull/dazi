@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Sparkles, Terminal } from "lucide-react";
+import { X, Sparkles, Terminal, Coins } from "lucide-react";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { useApp } from "./store";
 
-type Tab = "profile" | "facts" | "patterns" | "backend";
+type Tab = "profile" | "facts" | "patterns" | "backend" | "usage";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const readProfile = useApp((s) => s.readProfile);
@@ -185,6 +185,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               ~/.dazi/config.json
             </span>
           </button>
+          <button
+            onClick={() => setTab("usage")}
+            className={`flex-1 py-2 transition ${
+              tab === "usage"
+                ? "bg-white/70 font-medium text-gray-800"
+                : "text-gray-500 hover:bg-white/40"
+            }`}
+          >
+            <Coins size={11} className="mr-1 inline-block align-middle" />
+            用量
+            <span className="ml-1.5 text-[10px] text-gray-400">
+              ~/.dazi/usage/
+            </span>
+          </button>
         </div>
         <div className="flex-1 overflow-hidden p-4">
           {tab === "profile" ? (
@@ -249,6 +263,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             </div>
           ) : tab === "backend" ? (
             <BackendTab />
+          ) : tab === "usage" ? (
+            <UsageTab />
           ) : null}
         </div>
       </div>
@@ -495,6 +511,179 @@ function ModelProbeSection() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** 用量面板（反馈 #16）：按月聚合展示 token 消耗与估算费用。 */
+function UsageTab() {
+  const getUsage = useApp((s) => s.getUsage);
+  const listUsageMonths = useApp((s) => s.listUsageMonths);
+  const [months, setMonths] = useState<string[]>([]);
+  const [month, setMonth] = useState<string>("");
+  const [entries, setEntries] = useState<
+    {
+      at: string;
+      project_slug: string;
+      model: string | null;
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens: number;
+      cache_read_input_tokens: number;
+      cost_usd: number;
+    }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+
+  async function refresh(m?: string) {
+    setLoading(true);
+    try {
+      const ms = await listUsageMonths();
+      setMonths(ms);
+      const target = m ?? month ?? ms[0] ?? "";
+      if (target) {
+        setMonth(target);
+        const data = await getUsage(target);
+        setEntries(data.entries);
+      } else {
+        setEntries([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalInput = entries.reduce((s, e) => s + e.input_tokens, 0);
+  const totalOutput = entries.reduce((s, e) => s + e.output_tokens, 0);
+  const totalCacheC = entries.reduce(
+    (s, e) => s + e.cache_creation_input_tokens,
+    0
+  );
+  const totalCacheR = entries.reduce(
+    (s, e) => s + e.cache_read_input_tokens,
+    0
+  );
+  const totalCost = entries.reduce((s, e) => s + e.cost_usd, 0);
+
+  return (
+    <div className="flex h-full flex-col gap-3 overflow-y-auto">
+      <p className="text-[11px] leading-relaxed text-gray-500">
+        每次 autopilot 执行后自动落盘 usage 到{" "}
+        <code className="rounded bg-white/70 px-1">~/.dazi/usage/YYYY-MM.json</code>，
+        按月聚合展示。费用按 anthropic 公开单价表估算（未知模型计 0）。
+      </p>
+      <div className="flex items-center gap-2">
+        <select
+          value={month}
+          onChange={(e) => {
+            setMonth(e.target.value);
+            refresh(e.target.value);
+          }}
+          className="rounded-md border border-white/60 bg-white/80 px-2 py-1 text-[12px] outline-none focus:border-accent-border"
+        >
+          {months.length === 0 && <option value="">暂无数据</option>}
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => refresh()}
+          disabled={loading}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+            loading
+              ? "cursor-not-allowed bg-white/60 text-gray-400"
+              : "bg-accent/90 text-on-accent shadow-sm shadow-accent/20 hover:bg-accent"
+          }`}
+        >
+          {loading ? "刷新中…" : "刷新"}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="input" value={totalInput.toLocaleString()} />
+        <Stat label="output" value={totalOutput.toLocaleString()} />
+        <Stat label="cache" value={(totalCacheC + totalCacheR).toLocaleString()} />
+        <Stat label="费用 USD" value={`$${totalCost.toFixed(4)}`} />
+      </div>
+      <div className="overflow-hidden rounded-lg border border-white/70">
+        <table className="w-full text-[11px]">
+          <thead className="bg-white/70 text-left text-gray-500">
+            <tr>
+              <th className="px-2 py-1.5">时间</th>
+              <th className="px-2 py-1.5">项目</th>
+              <th className="px-2 py-1.5">模型</th>
+              <th className="px-2 py-1.5 text-right">in</th>
+              <th className="px-2 py-1.5 text-right">out</th>
+              <th className="px-2 py-1.5 text-right">cache</th>
+              <th className="px-2 py-1.5 text-right">USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-2 py-6 text-center text-gray-400"
+                >
+                  本月暂无 autopilot 执行记录。
+                </td>
+              </tr>
+            ) : (
+              entries
+                .slice()
+                .reverse()
+                .map((e, i) => (
+                  <tr
+                    key={`${e.at}-${i}`}
+                    className="border-t border-white/60 hover:bg-white/40"
+                  >
+                    <td className="px-2 py-1.5 font-mono text-gray-600">
+                      {e.at.replace("T", " ").slice(0, 16)}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-800">
+                      {e.project_slug}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-500">
+                      {e.model ?? "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      {e.input_tokens.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      {e.output_tokens.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-gray-500">
+                      {(
+                        e.cache_creation_input_tokens +
+                        e.cache_read_input_tokens
+                      ).toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      ${e.cost_usd.toFixed(4)}
+                    </td>
+                  </tr>
+                ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-white/60 bg-white/70 p-2">
+      <div className="text-[10px] text-gray-500">{label}</div>
+      <div className="font-mono text-[14px] font-semibold text-gray-800">
+        {value}
+      </div>
     </div>
   );
 }

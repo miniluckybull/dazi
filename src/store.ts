@@ -178,6 +178,24 @@ interface AppState {
   setBackend: (name: string) => Promise<void>;
   /** 模型可用检测（反馈 #15：整合 model-test） */
   testModelConfig: (config: ModelTestInput) => Promise<ModelTestResult>;
+  /** 用量查询（反馈 #16） */
+  getUsage: (month: string) => Promise<UsageMonth>;
+  listUsageMonths: () => Promise<string[]>;
+}
+
+export interface UsageEntry {
+  at: string;
+  project_slug: string;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  cost_usd: number;
+}
+
+export interface UsageMonth {
+  entries: UsageEntry[];
 }
 
 export interface ModelTestInput {
@@ -486,5 +504,12 @@ export const useApp = create<AppState>((set, get) => ({
 
   testModelConfig: async (config) => {
     return invoke<ModelTestResult>("test_model_config", { config });
+  },
+
+  getUsage: async (month) => {
+    return invoke<UsageMonth>("get_usage", { month });
+  },
+  listUsageMonths: async () => {
+    return invoke<string[]>("list_usage_months");
   },
 }));
