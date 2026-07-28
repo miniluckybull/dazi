@@ -4,7 +4,7 @@
 //! 不支持 `--permission-mode`，交互 `zcode "<prompt>"`，继续 `zcode -c`。
 //! 实际参数待用户提供 `zcode --help` 后回填。
 
-use super::{CliBackend, HeadlessSpec};
+use super::{CliBackend, HeadlessSpec, RunOutcome};
 use std::path::Path;
 
 #[derive(Default)]
@@ -80,5 +80,22 @@ impl CliBackend for ZcodeBackend {
 
     fn supports_permission_mode(&self) -> bool {
         false
+    }
+
+    fn parse_outcome(&self, stdout: &str, stderr: &str) -> Result<RunOutcome, String> {
+        // zcode 输出格式待确认（用户跑 `zcode --help` 后回填），本轮先按 claude JSON 解析。
+        match super::default_parse_claude_json(stdout) {
+            Ok(o) => Ok(o),
+            Err(_) => Ok(RunOutcome {
+                ok: false,
+                summary: format!(
+                    "zcode 输出无法按 claude JSON 解析（格式待确认）\nstdout: {}\nstderr: {}",
+                    &stdout[..stdout.len().min(200)],
+                    stderr
+                ),
+                session_id: None,
+                usage: None,
+            }),
+        }
     }
 }

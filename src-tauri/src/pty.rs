@@ -104,12 +104,16 @@ fn append_scrollback(scrollback: &Mutex<Vec<u8>>, data: &[u8]) {
     }
 }
 
-/// 构造 pty 内运行的命令。Handoff/Continue 都在 claude 退出后 exec 回登录 shell，
-/// 保证会话不因 claude 结束而关闭。
-/// agent_mode：仅 Handoff 生效。true 时走非交互 `claude -p --permission-mode bypassPermissions`
-/// （跳过所有确认，等价 autopilot，复用已验证路径），false 时保持交互式 TUI（反馈 #1）。
+/// 构造 pty 内运行的命令。Handoff/Continue 都在后端 CLI 退出后 exec 回登录 shell，
+/// 保证会话不因 CLI 结束而关闭。
+/// agent_mode：仅 Handoff 生效。true 时走后端的 headless 模式（默认 claude：
+/// `claude -p --permission-mode bypassPermissions`），false 时保持交互式 TUI（反馈 #1）。
+/// 后端选择从 ~/.dazi/config.json 读 "backend" 字段，回退到 claude。
 fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<CommandBuilder, String> {
+    use dazi_core::backend;
     let shell = autopilot::login_shell();
+    let cfg = dazi_core::config::load().unwrap_or_default();
+    let backend = backend::global().current(cfg.backend.as_deref());
     let mut cmd = CommandBuilder::new(&shell);
 
     #[cfg(unix)]
@@ -120,21 +124,32 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
             }
             PtyLaunch::Handoff => {
                 let p = prompt::build_handoff_prompt(cwd);
-                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
-                let quoted = autopilot::shell_single_quote(&p);
                 cmd.arg("-lc");
-                if agent_mode {
-                    cmd.arg(format!(
-                        "{claude} -p {quoted} --permission-mode bypassPermissions; exec {shell} -l"
-                    ));
+                let action = if agent_mode {
+                    // agent 模式：调后端 build_headless_cmd 但丢弃 cwd 走 shell。
+                    // kimi/zcode 不支持 --permission-mode 时，backend 内部会忽略。
+                    let spec = backend.build_headless_cmd(
+                        &p,
+                        "bypassPermissions",
+                        cwd,
+                    );
+                    let bin_q = autopilot::shell_single_quote(&spec.bin);
+                    let args = spec
+                        .args
+                        .iter()
+                        .map(|a| autopilot::shell_single_quote(a))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    format!("{bin_q} {args}")
                 } else {
-                    cmd.arg(format!("{claude} {quoted}; exec {shell} -l"));
-                }
+                    // 交互式：走 backend.build_interactive_cmd（已含 bin + 拼好的引号）
+                    backend.build_interactive_cmd(&p)
+                };
+                cmd.arg(format!("{action}; exec {shell} -l"));
             }
             PtyLaunch::Continue => {
-                let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
                 cmd.arg("-lc");
-                cmd.arg(format!("{claude} -c; exec {shell} -l"));
+                cmd.arg(format!("{}; exec {shell} -l", backend.build_continue_cmd()));
             }
         }
     }
@@ -143,7 +158,7 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
     {
         // Windows 用 cmd.exe：/K 执行命令后保持窗口。
         // 先 chcp 65001 把代码页切到 UTF-8，避免中文乱码。
-        let claude = autopilot::resolve_claude_bin();
+        let bin = backend.resolve_bin();
         match launch {
             PtyLaunch::Shell => {
                 cmd.arg("/K");
@@ -154,19 +169,24 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 // cmd.exe 双引号内把 \" 转义成 \\\"，换行替换为空格避免多行参数解析失败。
                 let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
                 cmd.arg("/K");
-                // Windows 历史上一直走非交互 bypassPermissions（无频繁 yes 问题）；
-                // agent_mode 关闭时改为交互式 claude，与 unix 行为对齐。
                 if agent_mode {
+                    let spec = backend.build_headless_cmd(&p, "bypassPermissions", cwd);
+                    let args = spec
+                        .args
+                        .iter()
+                        .map(|a| a.replace('"', "\\\""))
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     cmd.arg(format!(
-                        "chcp 65001 >nul & \"{claude}\" -p \"{escaped}\" --output-format json --permission-mode bypassPermissions"
+                        "chcp 65001 >nul & \"{bin}\" {args}"
                     ));
                 } else {
-                    cmd.arg(format!("chcp 65001 >nul & \"{claude}\" \"{escaped}\""));
+                    cmd.arg(format!("chcp 65001 >nul & \"{bin}\" \"{escaped}\""));
                 }
             }
             PtyLaunch::Continue => {
                 cmd.arg("/K");
-                cmd.arg(format!("chcp 65001 >nul & \"{claude}\" -c"));
+                cmd.arg(format!("chcp 65001 >nul & \"{bin}\" -c"));
             }
         }
     }
@@ -314,19 +334,36 @@ pub fn pty_launch(
     if s.claude_launched.swap(true, Ordering::SeqCst) {
         return Ok(true);
     }
-    let claude = autopilot::shell_single_quote(&autopilot::resolve_claude_bin());
+    let claude = {
+        use dazi_core::backend;
+        let cfg = dazi_core::config::load().unwrap_or_default();
+        backend::global().current(cfg.backend.as_deref())
+    };
     let agent = agent_mode.unwrap_or(false);
     let line = match launch {
         PtyLaunch::Handoff => {
             let p = prompt::build_handoff_prompt(&cwd);
-            let quoted = autopilot::shell_single_quote(&p);
             if agent {
-                format!("{claude} -p {quoted} --permission-mode bypassPermissions\r")
+                // 走 headless 命令（backend 内部处理 --permission-mode 是否透传）
+                let spec = claude.build_headless_cmd(&p, "bypassPermissions", &cwd);
+                let args = spec
+                    .args
+                    .iter()
+                    .map(|a| {
+                        if a.contains(' ') || a.contains('"') {
+                            format!("\"{}\"", a.replace('"', "\\\""))
+                        } else {
+                            a.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("{} {}\r", spec.bin, args)
             } else {
-                format!("{claude} {quoted}\r")
+                format!("{}\r", claude.build_interactive_cmd(&p))
             }
         }
-        PtyLaunch::Continue => format!("{claude} -c\r"),
+        PtyLaunch::Continue => format!("{}\r", claude.build_continue_cmd()),
         PtyLaunch::Shell => unreachable!(),
     };
     let write_result = s

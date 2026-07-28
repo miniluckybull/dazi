@@ -6,7 +6,7 @@
 //!
 //! 实际接入需要用户在本机跑 `kimi --help` 后回填具体参数。
 
-use super::{CliBackend, HeadlessSpec};
+use super::{CliBackend, HeadlessSpec, RunOutcome};
 use std::path::Path;
 
 #[derive(Default)]
@@ -83,5 +83,23 @@ impl CliBackend for KimiBackend {
 
     fn supports_permission_mode(&self) -> bool {
         false
+    }
+
+    fn parse_outcome(&self, stdout: &str, stderr: &str) -> Result<RunOutcome, String> {
+        // kimi 输出格式待确认（用户跑 `kimi --help` 后回填），本轮先按 claude JSON 解析。
+        // 解析失败时把 stdout 前 200 字塞进 summary，方便用户排错。
+        match super::default_parse_claude_json(stdout) {
+            Ok(o) => Ok(o),
+            Err(_) => Ok(RunOutcome {
+                ok: false,
+                summary: format!(
+                    "kimi 输出无法按 claude JSON 解析（格式待确认）\nstdout: {}\nstderr: {}",
+                    &stdout[..stdout.len().min(200)],
+                    stderr
+                ),
+                session_id: None,
+                usage: None,
+            }),
+        }
     }
 }

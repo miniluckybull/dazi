@@ -87,6 +87,9 @@ pub fn probe_claude() -> Result<String, String> {
 }
 
 /// 截断到 SUMMARY_MAX 字符，避免 journal / meta.yml 被超长输出撑爆。
+/// 备注：M3 重构后 parse_outcome 已迁移到 backend::default_parse_claude_json，
+/// 本函数保留为 lib 私有工具（未来若 journal 落盘前需要截断仍可能复用）。
+#[allow(dead_code)]
 fn truncate(s: &str) -> String {
     let t = s.trim();
     if t.chars().count() <= SUMMARY_MAX {
@@ -97,61 +100,8 @@ fn truncate(s: &str) -> String {
     }
 }
 
-/// 从 claude --output-format json 的 stdout 里提取结果。
-/// 登录 shell 可能混入 rc 噪音，所以扫描所有行，取最后一个能解析成
-/// 含 "result"/"session_id" 的 JSON 对象。
-fn parse_outcome(stdout: &str) -> RunOutcome {
-    let mut found: Option<serde_json::Value> = None;
-    for line in stdout.lines() {
-        let line = line.trim();
-        if !line.starts_with('{') {
-            continue;
-        }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
-            if v.get("result").is_some() || v.get("session_id").is_some() {
-                found = Some(v);
-            }
-        }
-    }
-    // 整段也试一次（非逐行输出的情况）。
-    if found.is_none() {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-            found = Some(v);
-        }
-    }
-    match found {
-        Some(v) => {
-            let is_error = v
-                .get("is_error")
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-            let subtype = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
-            let result = v
-                .get("result")
-                .and_then(|s| s.as_str())
-                .unwrap_or("")
-                .to_string();
-            let session_id = v
-                .get("session_id")
-                .and_then(|s| s.as_str())
-                .map(|s| s.to_string());
-            let ok = !is_error && subtype != "error_max_turns" && subtype != "error_during_execution";
-            let usage = v.get("usage").cloned();
-            let summary = if result.trim().is_empty() {
-                format!("claude 返回(subtype={subtype}) 无 result 文本")
-            } else {
-                truncate(&result)
-            };
-            RunOutcome { ok, summary, session_id, usage }
-        }
-        None => RunOutcome {
-            ok: false,
-            summary: format!("无法解析 claude 输出:\n{}", truncate(stdout)),
-            session_id: None,
-            usage: None,
-        },
-    }
-}
+// parse_outcome 已迁移到 backend::default_parse_claude_json（M3 #14 重构），
+// 这里不再保留私有解析函数，避免两处实现漂移。
 
 /// 单引号包裹用于 POSIX shell（zsh/bash 通用）：把 ' 替换成 '\'' 。
 pub fn shell_single_quote(s: &str) -> String {
@@ -198,49 +148,44 @@ pub fn run_plan(
     run_claude(project_path, prompt, model, "plan")
 }
 
-/// headless 运行 claude 的核心实现。工作目录设为项目根，
-/// 通过登录 shell 拿到用户 PATH，带硬超时，解析 JSON 结果。
-/// permission_mode：plan（只产计划）/ bypassPermissions（无人值守执行）。
+/// headless 运行后端 CLI 的核心实现。工作目录设为项目根，bin 由 backend trait 解析，
+/// 通过后端 trait 构造 headless 命令（默认 claude：-p <prompt> --output-format json
+/// --permission-mode <mode>），带硬超时，由后端 trait 解析结果。
+/// permission_mode：plan（只产计划）/ bypassPermissions（无人值守执行）/
+/// acceptEdits 等。后端若不支持该参数会自动忽略。
 fn run_claude(
     project_path: &Path,
     prompt: &str,
     model: Option<&str>,
     permission_mode: &str,
 ) -> Result<RunOutcome, String> {
-    let bin = resolve_claude_bin();
-    // 拼 claude 命令：-p 非交互 + json 输出 + 指定权限模式。
-    let mut inner = format!(
-        "{} -p {} --output-format json --permission-mode {}",
-        shell_single_quote(&bin),
-        shell_single_quote(prompt),
-        permission_mode
-    );
+    use crate::backend;
+    let cfg = crate::config::load().unwrap_or_default();
+    let backend = backend::global().current(cfg.backend.as_deref());
+    let spec = backend.build_headless_cmd(prompt, permission_mode, project_path);
+    let bin = spec.bin.clone();
+    let mut cmd = Command::new(&spec.bin);
+    cmd.args(&spec.args)
+        .current_dir(&spec.cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    // claude 风格 headless 支持 --model name；其他后端若不支持可忽略。
     if let Some(m) = model {
         if !m.trim().is_empty() {
-            inner.push_str(" --model ");
-            inner.push_str(&shell_single_quote(m));
+            cmd.arg("--model").arg(m);
         }
     }
+    // Unix：让 CLI 成为新进程组组长，超时可整组杀掉，避免子进程变孤儿。
+    #[cfg(unix)]
+    {
+        cmd.process_group(0);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("启动 {bin} 失败: {e}"))?;
 
-    let mut child = {
-        let mut cmd = Command::new(login_shell());
-        cmd.arg("-lc")
-            .arg(&inner)
-            .current_dir(project_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        // Unix：让 shell 成为新进程组组长（pgid == 它的 pid），超时时可整组杀掉，
-        // 避免只杀 shell 而 claude 子进程变孤儿继续在后台改文件。
-        #[cfg(unix)]
-        {
-            cmd.process_group(0);
-        }
-        cmd.spawn()
-            .map_err(|e| format!("启动 claude 失败: {e}"))?
-    };
-
-    // 后台线程持续抽干 stdout/stderr，避免管道写满（>64KB）导致 claude 阻塞、假超时。
+    // 后台线程持续抽干 stdout/stderr，避免管道写满（>64KB）导致 CLI 阻塞、假超时。
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
     let out_reader = std::thread::spawn(move || {
@@ -259,7 +204,7 @@ fn run_claude(
     });
 
     // 轮询 try_wait 实现硬超时，保持对 child 的所有权以便超时时 kill。
-    // Unix：pgid == shell 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
+    // Unix：pgid == CLI 的 pid（上面 process_group(0) 设的），用它杀整个进程组。
     #[cfg(unix)]
     let pgid = child.id();
     let start = std::time::Instant::now();
@@ -277,25 +222,20 @@ fn run_claude(
                 }
                 std::thread::sleep(Duration::from_millis(500));
             }
-            Err(e) => return Err(format!("等待 claude 进程失败: {e}")),
+            Err(e) => return Err(format!("等待 {bin} 进程失败: {e}")),
         }
     };
 
     if timed_out {
         return Err(format!(
-            "claude 执行超时（>{TIMEOUT_SECS}s），已终止本次自动执行"
+            "{bin} 执行超时（>{TIMEOUT_SECS}s），已终止本次自动执行"
         ));
     }
 
     let stdout = out_reader.join().unwrap_or_default();
     let stderr = err_reader.join().unwrap_or_default();
 
-    let mut outcome = parse_outcome(&stdout);
-    // stdout 完全没拿到可解析结果时，把 stderr 并进摘要方便排查。
-    if outcome.session_id.is_none() && !outcome.ok && !stderr.trim().is_empty() {
-        outcome.summary = format!("{}\nstderr: {}", outcome.summary, truncate(&stderr));
-    }
-    Ok(outcome)
+    backend.parse_outcome(&stdout, &stderr)
 }
 
 /// 把一次自动执行结果追加进项目 .dazi/journal.md。

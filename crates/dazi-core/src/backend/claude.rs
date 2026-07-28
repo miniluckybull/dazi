@@ -1,6 +1,6 @@
 //! Claude CLI 后端实现（默认后端，行为与 M2 前一致）。
 
-use super::{CliBackend, HeadlessSpec};
+use super::{CliBackend, HeadlessSpec, RunOutcome};
 use std::path::Path;
 
 #[derive(Default)]
@@ -54,5 +54,24 @@ impl CliBackend for ClaudeBackend {
 
     fn supports_permission_mode(&self) -> bool {
         true
+    }
+
+    fn parse_outcome(&self, stdout: &str, stderr: &str) -> Result<RunOutcome, String> {
+        // 解析 claude --output-format json 的标准结构
+        // （含 result / session_id / usage / is_error / subtype）。
+        match super::default_parse_claude_json(stdout) {
+            Ok(mut o) => {
+                if o.session_id.is_none() && !o.ok && !stderr.trim().is_empty() {
+                    o.summary = format!("{}\nstderr: {}", o.summary, stderr);
+                }
+                Ok(o)
+            }
+            Err(e) => Ok(RunOutcome {
+                ok: false,
+                summary: format!("{e}\nstderr: {stderr}"),
+                session_id: None,
+                usage: None,
+            }),
+        }
     }
 }

@@ -10,7 +10,6 @@
 //! - `parse_outcome` 把后端特定的 stdout 解析为统一 `BackendRunOutcome`，
 //!   autopilot::run_autopilot 走这个统一结果。
 
-use crate::autopilot::RunOutcome;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -61,6 +60,9 @@ pub trait CliBackend: Send + Sync {
     fn probe(&self) -> Result<String, String>;
     /// 是否支持 --permission-mode（kimi/zcode 不支持则 false）。
     fn supports_permission_mode(&self) -> bool;
+    /// 解析 headless 命令的 stdout 为统一 RunOutcome。
+    /// stderr 用于无 stdout 可解析时附在 summary 后面。
+    fn parse_outcome(&self, stdout: &str, stderr: &str) -> Result<RunOutcome, String>;
 }
 
 /// 全局后端注册表：进程内单例，按名字查 backend。
@@ -117,6 +119,17 @@ pub fn build_default_registry() -> BackendRegistry {
     r.register(Arc::new(zcode::ZcodeBackend::default()));
     r
 }
+
+use std::sync::OnceLock;
+static GLOBAL: OnceLock<BackendRegistry> = OnceLock::new();
+
+/// 进程内全局注册表（首次访问时初始化为默认三后端）。
+pub fn global() -> &'static BackendRegistry {
+    GLOBAL.get_or_init(build_default_registry)
+}
+
+// 把 RunOutcome re-export 到 backend 命名空间，方便各 backend 实现引用。
+pub use crate::autopilot::RunOutcome;
 
 /// 解析 outcome 的便捷 trait 扩展：让 backend 自选实现，默认 claude 风格 JSON。
 /// 多数后端要 override parse_outcome；kimi/zcode 在实现内做对应解析。

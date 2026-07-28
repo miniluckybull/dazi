@@ -32,6 +32,7 @@ fn set_workspace(path: PathBuf) -> Result<AppConfig, String> {
     project::ensure_workspace_layout(&path)?;
     let cfg = AppConfig {
         workspace: Some(path),
+        backend: None,
     };
     config::save(&cfg)?;
     Ok(cfg)
@@ -234,7 +235,8 @@ fn synthesize_patterns(_app: tauri::AppHandle) -> Result<(), String> {
     );
 
     let kind = read_terminal_kind(&cfg.workspace);
-    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
+    let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
+    let cmd = escape_applescript(&backend.build_interactive_cmd(&prompt));
     run_in_terminal(&kind, &dazi_dir, Some(&cmd))?;
     Ok(())
 }
@@ -280,7 +282,8 @@ fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), St
     );
 
     let kind = read_terminal_kind(&cfg.workspace);
-    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
+    let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
+    let cmd = escape_applescript(&backend.build_interactive_cmd(&prompt));
     run_in_terminal(&kind, &dazi_dir, Some(&cmd))?;
     Ok(())
 }
@@ -367,7 +370,8 @@ fn hand_off_to_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<P
     let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
     let prompt = prompt::build_handoff_prompt(&project_path);
-    let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
+    let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
+    let cmd = escape_applescript(&backend.build_interactive_cmd(&prompt));
     run_in_terminal(&kind, &project_path, Some(&cmd))?;
     project::mark_handed_off(&project_path)
 }
@@ -379,7 +383,8 @@ fn continue_with_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result
     }
     let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
-    run_in_terminal(&kind, &project_path, Some("claude -c"))
+    let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
+    run_in_terminal(&kind, &project_path, Some(&backend.build_continue_cmd()))
 }
 
 #[tauri::command]
