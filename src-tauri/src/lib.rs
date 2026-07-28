@@ -214,6 +214,15 @@ fn set_backend(name: String) -> Result<String, String> {
     Ok(name)
 }
 
+/// 测试单个 API 配置的连通性（反馈 #15：整合 model-test 的检测能力）。
+/// dazi tauri 异步命令包装层，调用 dazi_core::model_test::test_config。
+#[tauri::command]
+async fn test_model_config(
+    config: dazi_core::model_test::ApiConfig,
+) -> dazi_core::model_test::ModelTestResult {
+    dazi_core::model_test::test_config(&config).await
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -655,6 +664,7 @@ pub fn run() {
             list_backends,
             get_backend,
             set_backend,
+            test_model_config,
             write_facts,
             read_project_journal,
             read_project_context,

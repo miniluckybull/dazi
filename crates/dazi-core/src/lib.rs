@@ -6,6 +6,7 @@ pub mod backend;
 pub mod config;
 pub mod events;
 pub mod memory;
+pub mod model_test;
 pub mod project;
 pub mod prompt;
 pub mod schedule;

@@ -280,6 +280,7 @@ function BackendTab() {
         选择后会影响 handoff / autopilot / 复盘 / 提炼 skill 等所有调用路径，
         持久化到 <code className="rounded bg-white/70 px-1">~/.dazi/config.json</code>。
       </p>
+      <ModelProbeSection />
       <div className="flex justify-end">
         <button
           onClick={refresh}
@@ -353,6 +354,147 @@ function BackendTab() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** 模型可用检测（反馈 #15）：让用户填 endpoint/api_key 测连通性，
+ *  通过的结果可作为 #14 后端切换的参考。 */
+function ModelProbeSection() {
+  const testModelConfig = useApp((s) => s.testModelConfig);
+  const [provider, setProvider] = useState("anthropic");
+  const [endpoint, setEndpoint] = useState("https://api.anthropic.com");
+  const [model, setModel] = useState("claude-sonnet-4-5");
+  const [apiKey, setApiKey] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    latency_ms: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    error_message: string | null;
+    model_response: string | null;
+    actual_model: string | null;
+  } | null>(null);
+
+  async function run() {
+    if (!apiKey.trim() || !endpoint.trim() || !model.trim()) {
+      setResult({
+        success: false,
+        latency_ms: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        error_message: "endpoint / model / api_key 都必填",
+        model_response: null,
+        actual_model: null,
+      });
+      return;
+    }
+    setTesting(true);
+    setResult(null);
+    try {
+      const r = await testModelConfig({
+        id: "probe-" + Date.now(),
+        name: "probe",
+        provider,
+        endpoint,
+        model,
+        api_key: apiKey,
+      });
+      setResult(r);
+    } catch (e: any) {
+      setResult({
+        success: false,
+        latency_ms: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        error_message: String(e),
+        model_response: null,
+        actual_model: null,
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-white/70 bg-white/60 p-3">
+      <div className="mb-2 text-[12px] font-semibold text-gray-700">
+        模型可用检测
+        <span className="ml-2 text-[10px] font-normal text-gray-400">
+          （整合 model-test 能力，dazi-core 复用同一份 reqwest 测试逻辑）
+        </span>
+      </div>
+      <div className="grid grid-cols-[80px_1fr] items-center gap-x-2 gap-y-1.5 text-[11px]">
+        <label className="text-gray-500">provider</label>
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          className="rounded-md border border-white/60 bg-white/80 px-2 py-1 text-[12px] outline-none focus:border-accent-border"
+        >
+          <option value="anthropic">anthropic</option>
+          <option value="openai">openai (兼容)</option>
+        </select>
+        <label className="text-gray-500">endpoint</label>
+        <input
+          value={endpoint}
+          onChange={(e) => setEndpoint(e.target.value)}
+          placeholder="https://api.anthropic.com"
+          className="rounded-md border border-white/60 bg-white/80 px-2 py-1 font-mono text-[12px] outline-none focus:border-accent-border"
+        />
+        <label className="text-gray-500">model</label>
+        <input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder="claude-sonnet-4-5"
+          className="rounded-md border border-white/60 bg-white/80 px-2 py-1 font-mono text-[12px] outline-none focus:border-accent-border"
+        />
+        <label className="text-gray-500">api_key</label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="sk-…"
+          className="rounded-md border border-white/60 bg-white/80 px-2 py-1 font-mono text-[12px] outline-none focus:border-accent-border"
+        />
+      </div>
+      <div className="mt-2 flex justify-end">
+        <button
+          onClick={run}
+          disabled={testing}
+          className={`rounded-md px-3 py-1 text-[12px] font-medium transition ${
+            testing
+              ? "cursor-not-allowed bg-white/60 text-gray-400"
+              : "bg-accent/90 text-on-accent shadow-sm shadow-accent/20 hover:bg-accent"
+          }`}
+        >
+          {testing ? "检测中…" : "测试连通性"}
+        </button>
+      </div>
+      {result && (
+        <div
+          className={`mt-2 rounded-md p-2 text-[11px] ${
+            result.success
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-red-50 text-red-700"
+          }`}
+        >
+          {result.success ? (
+            <>
+              ✓ {result.latency_ms}ms · input{" "}
+              {result.prompt_tokens} · output {result.completion_tokens}
+              {result.actual_model && ` · 实际模型 ${result.actual_model}`}
+              {result.model_response && (
+                <div className="mt-1 truncate text-gray-600">
+                  响应: {result.model_response}
+                </div>
+              )}
+            </>
+          ) : (
+            <>✗ {result.error_message}</>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -176,6 +176,28 @@ interface AppState {
   backendList: BackendInfo[];
   loadBackend: () => Promise<void>;
   setBackend: (name: string) => Promise<void>;
+  /** 模型可用检测（反馈 #15：整合 model-test） */
+  testModelConfig: (config: ModelTestInput) => Promise<ModelTestResult>;
+}
+
+export interface ModelTestInput {
+  id: string;
+  name: string;
+  provider: string;
+  endpoint: string;
+  model: string;
+  api_key: string;
+}
+
+export interface ModelTestResult {
+  config_id: string;
+  success: boolean;
+  latency_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  error_message: string | null;
+  model_response: string | null;
+  actual_model: string | null;
 }
 
 export interface BackendInfo {
@@ -460,5 +482,9 @@ export const useApp = create<AppState>((set, get) => ({
     } catch (e: any) {
       set({ error: String(e) });
     }
+  },
+
+  testModelConfig: async (config) => {
+    return invoke<ModelTestResult>("test_model_config", { config });
   },
 }));

@@ -1,0 +1,8 @@
+# 本会话内禁用 cargo 走 7890 代理（端口不可达），让 cargo 直接连 crates.io。
+# M3 #15 临时绕开，不影响其他 dazi 构建（项目级配置只生效此项目）。
+[http]
+proxy = ""
+[https]
+proxy = ""
+[net]
+git-fetch-with-cli = true
