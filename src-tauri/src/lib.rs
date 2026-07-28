@@ -272,6 +272,24 @@ fn check_environment() -> String {
     dazi_core::credentials::check_environment()
 }
 
+/// 读取远程 daemon 配置（host/port/pin），存到 ~/.dazi/daemon.json（base64+0600）。
+#[tauri::command]
+fn get_daemon_config() -> dazi_core::daemon_client::DaemonConfig {
+    dazi_core::daemon_client::get_daemon_config().unwrap_or_default()
+}
+
+#[tauri::command]
+fn save_daemon_config(c: dazi_core::daemon_client::DaemonConfig) -> Result<(), String> {
+    dazi_core::daemon_client::save_daemon_config(&c)
+}
+
+/// ping 远程 daemon（GET /health）。MVP 范围：只验证连通性，
+/// 完整 pair / auth / 业务转发留 v3.1。
+#[tauri::command]
+async fn daemon_ping(host: String, port: u16) -> Result<serde_json::Value, String> {
+    dazi_core::daemon_client::ping(&host, port).await
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -730,6 +748,9 @@ pub fn run() {
             save_credential,
             clear_credential,
             check_environment,
+            get_daemon_config,
+            save_daemon_config,
+            daemon_ping,
             write_facts,
             read_project_journal,
             read_project_context,

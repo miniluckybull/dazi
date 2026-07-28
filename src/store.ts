@@ -189,6 +189,16 @@ interface AppState {
   saveCredential: (slot: string, cred: Credential) => Promise<void>;
   clearCredential: (slot: string) => Promise<void>;
   checkEnvironment: () => Promise<string>;
+  /** 远程 daemon 连接（反馈 #12 MVP） */
+  getDaemonConfig: () => Promise<DaemonConfig>;
+  saveDaemonConfig: (c: DaemonConfig) => Promise<void>;
+  daemonPing: (host: string, port: number) => Promise<unknown>;
+}
+
+export interface DaemonConfig {
+  host: string;
+  port: number;
+  pin: string;
 }
 
 export interface Credential {
@@ -557,5 +567,15 @@ export const useApp = create<AppState>((set, get) => ({
   },
   checkEnvironment: async () => {
     return invoke<string>("check_environment");
+  },
+
+  getDaemonConfig: async () => {
+    return invoke<DaemonConfig>("get_daemon_config");
+  },
+  saveDaemonConfig: async (c) => {
+    await invoke("save_daemon_config", { c });
+  },
+  daemonPing: async (host, port) => {
+    return invoke("daemon_ping", { host, port });
   },
 }));
