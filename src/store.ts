@@ -184,6 +184,23 @@ interface AppState {
   /** 团队技能库（反馈 #11 MVP） */
   listTeamSkills: () => Promise<TeamSkill[]>;
   mountTeamSkill: (slug: string, projectPath: string) => Promise<boolean>;
+  /** 凭据与环境检测（反馈 #13） */
+  getCredentials: () => Promise<Credentials>;
+  saveCredential: (slot: string, cred: Credential) => Promise<void>;
+  clearCredential: (slot: string) => Promise<void>;
+  checkEnvironment: () => Promise<string>;
+}
+
+export interface Credential {
+  base_url: string;
+  api_key: string;
+  provider: string;
+}
+
+export interface Credentials {
+  anthropic: Credential | null;
+  openai: Credential | null;
+  custom: Credential | null;
 }
 
 export interface TeamSkill {
@@ -527,5 +544,18 @@ export const useApp = create<AppState>((set, get) => ({
   },
   mountTeamSkill: async (slug, projectPath) => {
     return invoke<boolean>("mount_team_skill", { slug, projectPath });
+  },
+
+  getCredentials: async () => {
+    return invoke<Credentials>("get_credentials");
+  },
+  saveCredential: async (slot, cred) => {
+    await invoke("save_credential", { slot, cred });
+  },
+  clearCredential: async (slot) => {
+    await invoke("clear_credential", { slot });
+  },
+  checkEnvironment: async () => {
+    return invoke<string>("check_environment");
   },
 }));

@@ -248,6 +248,30 @@ fn mount_team_skill(slug: String, project_path: PathBuf) -> Result<bool, String>
     dazi_core::team_skills::mount_team_skill(&slug, &project_path)
 }
 
+/// 读取已存的凭据（反馈 #13：apikey 加密存储，base64 + 0600，非真加密）。
+#[tauri::command]
+fn get_credentials() -> dazi_core::credentials::Credentials {
+    dazi_core::credentials::get_credentials().unwrap_or_default()
+}
+
+/// 保存一个槽位的凭据。
+#[tauri::command]
+fn save_credential(slot: String, cred: dazi_core::credentials::Credential) -> Result<(), String> {
+    dazi_core::credentials::save_credential(&slot, cred)
+}
+
+/// 清除一个槽位的凭据。
+#[tauri::command]
+fn clear_credential(slot: String) -> Result<(), String> {
+    dazi_core::credentials::clear_credential(&slot)
+}
+
+/// 环境检测报告（反馈 #13 首次安装引导）。
+#[tauri::command]
+fn check_environment() -> String {
+    dazi_core::credentials::check_environment()
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -702,6 +726,10 @@ pub fn run() {
             list_usage_months,
             list_team_skills,
             mount_team_skill,
+            get_credentials,
+            save_credential,
+            clear_credential,
+            check_environment,
             write_facts,
             read_project_journal,
             read_project_context,

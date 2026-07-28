@@ -4,6 +4,7 @@
 pub mod autopilot;
 pub mod backend;
 pub mod config;
+pub mod credentials;
 pub mod events;
 pub mod memory;
 pub mod model_test;
