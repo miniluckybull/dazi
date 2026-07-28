@@ -4,6 +4,10 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AppConfig {
     pub workspace: Option<PathBuf>,
+    /// 当前 CLI 后端（"claude" / "kimi" / "zcode"），见 backend 模块。
+    /// 缺失时回退到 ClaudeBackend。
+    #[serde(default)]
+    pub backend: Option<String>,
 }
 
 fn home_dir() -> Result<PathBuf, String> {

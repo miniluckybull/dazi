@@ -13,6 +13,9 @@ pub struct RunOutcome {
     /// 给 journal / 通知用的简短摘要（成功时是 result 摘要，失败时是错误信息）。
     pub summary: String,
     pub session_id: Option<String>,
+    /// 原始 usage 字段（input_tokens / output_tokens / cache_creation_input_tokens 等），
+    /// 供 #16 token 监控落盘与月度统计；解析失败时为 None。
+    pub usage: Option<serde_json::Value>,
 }
 
 const TIMEOUT_SECS: u64 = 600; // 10 分钟硬超时
@@ -133,17 +136,19 @@ fn parse_outcome(stdout: &str) -> RunOutcome {
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string());
             let ok = !is_error && subtype != "error_max_turns" && subtype != "error_during_execution";
+            let usage = v.get("usage").cloned();
             let summary = if result.trim().is_empty() {
                 format!("claude 返回(subtype={subtype}) 无 result 文本")
             } else {
                 truncate(&result)
             };
-            RunOutcome { ok, summary, session_id }
+            RunOutcome { ok, summary, session_id, usage }
         }
         None => RunOutcome {
             ok: false,
             summary: format!("无法解析 claude 输出:\n{}", truncate(stdout)),
             session_id: None,
+            usage: None,
         },
     }
 }

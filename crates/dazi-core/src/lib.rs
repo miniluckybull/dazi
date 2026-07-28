@@ -2,6 +2,7 @@
 //! 桌面 app（src-tauri）与未来的 dazi-daemon 都依赖本 crate 复用同一套逻辑。
 
 pub mod autopilot;
+pub mod backend;
 pub mod config;
 pub mod events;
 pub mod memory;

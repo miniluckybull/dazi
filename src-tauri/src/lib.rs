@@ -459,6 +459,7 @@ fn execute_autopilot(
                 ok: false,
                 summary: e.clone(),
                 session_id: None,
+                usage: None,
             };
             let _ = autopilot::append_autopilot_journal(project_path, &outcome);
             (false, e)
