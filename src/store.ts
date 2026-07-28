@@ -171,6 +171,18 @@ interface AppState {
   readProjectJournal: (projectPath: string) => Promise<string>;
   readProjectContext: (projectPath: string) => Promise<string>;
   synthesizePatterns: () => Promise<void>;
+  /** CLI 后端选择（反馈 #14）：持久化到 ~/.dazi/config.json */
+  backend: string;
+  backendList: BackendInfo[];
+  loadBackend: () => Promise<void>;
+  setBackend: (name: string) => Promise<void>;
+}
+
+export interface BackendInfo {
+  name: string;
+  bin: string;
+  version: string | null;
+  supports_permission_mode: boolean;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -183,6 +195,8 @@ export const useApp = create<AppState>((set, get) => ({
   error: null,
   attention: {},
   agentMode: localStorage.getItem("dazi_agent_mode") === "1",
+  backend: "claude",
+  backendList: [],
 
   setAttention: (slug, v) =>
     set((st) => {
@@ -426,4 +440,25 @@ export const useApp = create<AppState>((set, get) => ({
   readProjectContext: (projectPath) =>
     invoke<string>("read_project_context", { projectPath }),
   synthesizePatterns: () => invoke("synthesize_patterns"),
+
+  loadBackend: async () => {
+    try {
+      const [name, list] = await Promise.all([
+        invoke<string>("get_backend"),
+        invoke<BackendInfo[]>("list_backends"),
+      ]);
+      set({ backend: name, backendList: list });
+    } catch (e: any) {
+      set({ error: String(e) });
+    }
+  },
+
+  setBackend: async (name) => {
+    try {
+      const confirmed = await invoke<string>("set_backend", { name });
+      set({ backend: confirmed });
+    } catch (e: any) {
+      set({ error: String(e) });
+    }
+  },
 }));

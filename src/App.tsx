@@ -399,12 +399,14 @@ export default function App() {
   const selectedSlug = useApp((s) => s.selectedSlug);
   const loadConfig = useApp((s) => s.loadConfig);
   const refreshProjects = useApp((s) => s.refreshProjects);
+  const loadBackend = useApp((s) => s.loadBackend);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     initTheme();
     loadConfig();
-  }, [loadConfig]);
+    loadBackend();
+  }, [loadConfig, loadBackend]);
 
   useEffect(() => {
     let unlisteners: Array<() => void> = [];

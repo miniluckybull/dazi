@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Sparkles } from "lucide-react";
+import { X, Sparkles, Terminal } from "lucide-react";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { useApp } from "./store";
 
-type Tab = "profile" | "facts" | "patterns";
+type Tab = "profile" | "facts" | "patterns" | "backend";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const readProfile = useApp((s) => s.readProfile);
@@ -171,6 +171,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               ~/.dazi/patterns.md
             </span>
           </button>
+          <button
+            onClick={() => setTab("backend")}
+            className={`flex-1 py-2 transition ${
+              tab === "backend"
+                ? "bg-white/70 font-medium text-gray-800"
+                : "text-gray-500 hover:bg-white/40"
+            }`}
+          >
+            <Terminal size={11} className="mr-1 inline-block align-middle" />
+            CLI 后端
+            <span className="ml-1.5 text-[10px] text-gray-400">
+              ~/.dazi/config.json
+            </span>
+          </button>
         </div>
         <div className="flex-1 overflow-hidden p-4">
           {tab === "profile" ? (
@@ -204,7 +218,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-accent-border focus:bg-white"
               />
             </div>
-          ) : (
+          ) : tab === "patterns" ? (
             <div className="flex h-full flex-col gap-2">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-[11px] leading-relaxed text-gray-500">
@@ -233,8 +247,111 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 className="flex-1 resize-none rounded-md border border-white/60 bg-white/80 p-3 font-mono text-[13px] leading-relaxed text-gray-800 outline-none transition focus:border-accent-border focus:bg-white"
               />
             </div>
-          )}
+          ) : tab === "backend" ? (
+            <BackendTab />
+          ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** CLI 后端选择面板（反馈 #14）：列出已注册后端 + 探活 + 切换。 */
+function BackendTab() {
+  const backend = useApp((s) => s.backend);
+  const backendList = useApp((s) => s.backendList);
+  const setBackend = useApp((s) => s.setBackend);
+  const loadBackend = useApp((s) => s.loadBackend);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await loadBackend();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-3 overflow-y-auto">
+      <p className="text-[11px] leading-relaxed text-gray-500">
+        切换 dazi 调用的 CLI 工具。当前已注册 {backendList.length} 个后端，
+        选择后会影响 handoff / autopilot / 复盘 / 提炼 skill 等所有调用路径，
+        持久化到 <code className="rounded bg-white/70 px-1">~/.dazi/config.json</code>。
+      </p>
+      <div className="flex justify-end">
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+            refreshing
+              ? "cursor-not-allowed bg-white/60 text-gray-400"
+              : "bg-accent/90 text-on-accent shadow-sm shadow-accent/20 hover:bg-accent"
+          }`}
+        >
+          {refreshing ? "检测中…" : "重新探活"}
+        </button>
+      </div>
+      <div className="flex flex-col gap-2">
+        {backendList.length === 0 && (
+          <p className="text-xs text-gray-400">暂无后端，启动时自动检测。</p>
+        )}
+        {backendList.map((b) => {
+          const active = backend === b.name;
+          const available = b.version !== null;
+          return (
+            <button
+              key={b.name}
+              onClick={() => setBackend(b.name)}
+              disabled={!available}
+              className={`flex items-start gap-3 rounded-lg border p-3 text-left transition ${
+                active
+                  ? "border-accent bg-accent-soft/60"
+                  : "border-white/70 bg-white/70 hover:bg-white/90"
+              } ${!available ? "opacity-60" : ""}`}
+            >
+              <div
+                className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition ${
+                  active
+                    ? "border-accent bg-accent"
+                    : "border-gray-300 bg-white"
+                }`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-900">
+                    {b.name}
+                  </span>
+                  {active && (
+                    <span className="rounded bg-accent/90 px-1.5 py-0.5 text-[10px] font-medium text-on-accent">
+                      当前
+                    </span>
+                  )}
+                  {!available && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+                      未安装
+                    </span>
+                  )}
+                  {b.supports_permission_mode && (
+                    <span
+                      title="支持 --permission-mode，代理模式开关可用"
+                      className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-600"
+                    >
+                      perm-mode
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+                  {b.bin}
+                </div>
+                <div className="mt-0.5 text-[11px] text-gray-500">
+                  版本: {b.version ?? "—"}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

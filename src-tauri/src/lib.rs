@@ -166,6 +166,54 @@ fn write_facts(content: String) -> Result<(), String> {
     memory::write_global("facts.md", &content)
 }
 
+#[derive(serde::Serialize)]
+struct BackendInfo {
+    name: String,
+    bin: String,
+    version: Option<String>,
+    supports_permission_mode: bool,
+}
+
+/// 列出已注册后端 + 探活结果（反馈 #14 UI）。
+#[tauri::command]
+fn list_backends() -> Vec<BackendInfo> {
+    use dazi_core::backend;
+    backend::global()
+        .list()
+        .into_iter()
+        .map(|name| {
+            let b = backend::global().get(&name).unwrap();
+            let version = b.probe().ok();
+            BackendInfo {
+                name: b.name().to_string(),
+                bin: b.resolve_bin(),
+                version,
+                supports_permission_mode: b.supports_permission_mode(),
+            }
+        })
+        .collect()
+}
+
+/// 读取当前选中的后端名（未设置回退 "claude"）。
+#[tauri::command]
+fn get_backend() -> String {
+    let cfg = config::load().unwrap_or_default();
+    cfg.backend.unwrap_or_else(|| dazi_core::backend::BackendName::CLAUDE.to_string())
+}
+
+/// 切换后端，校验名必须在已注册列表中。
+#[tauri::command]
+fn set_backend(name: String) -> Result<String, String> {
+    use dazi_core::backend;
+    if backend::global().get(&name).is_none() {
+        return Err(format!("未知后端: {name}"));
+    }
+    let mut cfg = config::load().unwrap_or_default();
+    cfg.backend = Some(name.clone());
+    config::save(&cfg)?;
+    Ok(name)
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -604,6 +652,9 @@ pub fn run() {
             read_patterns,
             write_patterns,
             read_facts,
+            list_backends,
+            get_backend,
+            set_backend,
             write_facts,
             read_project_journal,
             read_project_context,
