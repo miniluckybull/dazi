@@ -235,6 +235,19 @@ fn list_usage_months() -> Vec<String> {
     dazi_core::usage::list_months().unwrap_or_default()
 }
 
+/// 列出团队技能（反馈 #11 MVP：~/.dazi/team-skills/ 共享目录）。
+#[tauri::command]
+fn list_team_skills() -> Vec<dazi_core::team_skills::TeamSkill> {
+    dazi_core::team_skills::list_team_skills().unwrap_or_default()
+}
+
+/// 把团队技能挂载到项目（复制 SKILL.md 到 {project}/.claude/skills/{slug}/）。
+/// 返回 true = 新挂载，false = 已存在跳过。
+#[tauri::command]
+fn mount_team_skill(slug: String, project_path: PathBuf) -> Result<bool, String> {
+    dazi_core::team_skills::mount_team_skill(&slug, &project_path)
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -687,6 +700,8 @@ pub fn run() {
             test_model_config,
             get_usage,
             list_usage_months,
+            list_team_skills,
+            mount_team_skill,
             write_facts,
             read_project_journal,
             read_project_context,

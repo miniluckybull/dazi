@@ -10,4 +10,5 @@ pub mod model_test;
 pub mod project;
 pub mod prompt;
 pub mod schedule;
+pub mod team_skills;
 pub mod usage;

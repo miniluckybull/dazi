@@ -181,6 +181,15 @@ interface AppState {
   /** 用量查询（反馈 #16） */
   getUsage: (month: string) => Promise<UsageMonth>;
   listUsageMonths: () => Promise<string[]>;
+  /** 团队技能库（反馈 #11 MVP） */
+  listTeamSkills: () => Promise<TeamSkill[]>;
+  mountTeamSkill: (slug: string, projectPath: string) => Promise<boolean>;
+}
+
+export interface TeamSkill {
+  slug: string;
+  path: string;
+  description: string | null;
 }
 
 export interface UsageEntry {
@@ -511,5 +520,12 @@ export const useApp = create<AppState>((set, get) => ({
   },
   listUsageMonths: async () => {
     return invoke<string[]>("list_usage_months");
+  },
+
+  listTeamSkills: async () => {
+    return invoke<TeamSkill[]>("list_team_skills");
+  },
+  mountTeamSkill: async (slug, projectPath) => {
+    return invoke<boolean>("mount_team_skill", { slug, projectPath });
   },
 }));
