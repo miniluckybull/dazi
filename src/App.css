@@ -149,46 +149,48 @@ body {
   --crepe-color-inline-area: #342c58;
 }
 .crepe-host .milkdown .ProseMirror {
-  padding: 20px 28px 48px;
+  /* 左侧留出 48px gutter 给块拖拽手柄（⠿/➕），避免其 flip 到文本上或溢出窗口 */
+  padding: 16px 28px 48px 48px;
+  font-size: 14px;
 }
 /* Crepe reset.css 默认标题过大（h1=42px），收敛到文档编辑舒适字号 */
 .crepe-host .milkdown .ProseMirror h1 {
-  font-size: 32px;
+  font-size: 23px;
   font-weight: 700;
-  line-height: 1.25;
-  margin: 0.6em 0 0.4em;
-  padding-bottom: 0.25em;
+  line-height: 1.3;
+  margin: 0.6em 0 0.35em;
+  padding-bottom: 0.2em;
   border-bottom: 2px solid rgb(var(--c-accent) / 0.25);
 }
 .crepe-host .milkdown .ProseMirror h2 {
-  font-size: 26px;
+  font-size: 19px;
   font-weight: 700;
-  line-height: 1.3;
-  margin: 0.7em 0 0.35em;
+  line-height: 1.35;
+  margin: 0.65em 0 0.3em;
 }
 .crepe-host .milkdown .ProseMirror h3 {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.35;
-  margin: 0.7em 0 0.3em;
-}
-.crepe-host .milkdown .ProseMirror h4 {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
-  margin: 0.7em 0 0.3em;
+  margin: 0.65em 0 0.3em;
 }
-.crepe-host .milkdown .ProseMirror h5 {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.4;
-  margin: 0.6em 0 0.3em;
-}
-.crepe-host .milkdown .ProseMirror h6 {
+.crepe-host .milkdown .ProseMirror h4 {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
-  margin: 0.6em 0 0.3em;
+  margin: 0.6em 0 0.25em;
+}
+.crepe-host .milkdown .ProseMirror h5 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.6em 0 0.25em;
+}
+.crepe-host .milkdown .ProseMirror h6 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.6em 0 0.25em;
   color: rgb(var(--c-gray-500));
 }
 /* 段落与正文：行距拉宽，提升长文可读性（反馈 #8） */
@@ -240,4 +242,39 @@ body {
 [data-theme="dark"] .crepe-host ::selection {
   background: rgba(167, 139, 250, 0.45);
   color: inherit;
+}
+
+/* ── 选中文字工具栏：紧凑化，避免笨重（按钮 32→26px，图标 24→16px） ── */
+.crepe-host .milkdown .milkdown-toolbar {
+  max-width: calc(100% - 8px);
+  flex-wrap: wrap;
+  border-radius: 6px;
+}
+.crepe-host .milkdown .milkdown-toolbar .toolbar-item {
+  width: 26px;
+  height: 26px;
+  margin: 2px;
+  padding: 3px;
+}
+.crepe-host .milkdown .milkdown-toolbar .toolbar-item svg {
+  width: 16px;
+  height: 16px;
+}
+.crepe-host .milkdown .milkdown-toolbar .divider {
+  height: 16px;
+  margin: 5px 2px;
+}
+
+/* ── 块拖拽手柄（⠿/➕）：紧凑化以适配左侧 gutter ── */
+.crepe-host .milkdown .milkdown-block-handle {
+  gap: 1px;
+}
+.crepe-host .milkdown .milkdown-block-handle .operation-item {
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+}
+.crepe-host .milkdown .milkdown-block-handle .operation-item svg {
+  width: 14px;
+  height: 14px;
 }

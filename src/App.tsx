@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import {
   Trash2,
@@ -10,6 +10,9 @@ import {
   Repeat,
   Zap,
   Brain,
+  Settings,
+  ChevronsLeft,
+  ChevronsRight,
   Sun,
   Moon,
   SunMoon,
@@ -17,6 +20,7 @@ import {
 import { useApp, ProjectSummary, ProjectInit, TaskType } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
 import { SettingsPanel } from "./SettingsPanel";
+import { PreferencesPanel } from "./PreferencesPanel";
 import { ThemePref, cycleTheme, getThemePref, initTheme, onThemeChange } from "./theme";
 import "./App.css";
 
@@ -192,9 +196,15 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
 function ProjectList({
   items,
   onOpenSettings,
+  onOpenPreferences,
+  collapsed,
+  onToggleCollapse,
 }: {
   items: ProjectSummary[];
   onOpenSettings: () => void;
+  onOpenPreferences: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const selectedSlug = useApp((s) => s.selectedSlug);
   const selectProject = useApp((s) => s.selectProject);
@@ -240,13 +250,37 @@ function ProjectList({
     await revealReferences(p.path);
   }
 
+  if (collapsed) {
+    return (
+      <aside className="flex h-full w-10 flex-col items-center gap-2 border-r border-white/60 bg-white/55 py-2 backdrop-blur-xl">
+        <button
+          onClick={onToggleCollapse}
+          title="展开任务列表"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
+        >
+          <ChevronsRight size={14} />
+        </button>
+        <ThemeToggle />
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-white/60 bg-white/55 backdrop-blur-xl">
+    <aside
+      className="flex h-full w-72 flex-col border-r border-white/60 bg-white/55 backdrop-blur-xl"
+    >
       <div className="flex items-center justify-between border-b border-white/60 px-4 py-3">
         <h2 className="text-sm font-semibold text-gray-700">
           {showArchived ? "已归档" : "工作任务"}
         </h2>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={onToggleCollapse}
+            title="折叠任务列表（右侧详情最大化）"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
+          >
+            <ChevronsLeft size={14} />
+          </button>
           <ThemeToggle />
           <button
             onClick={onOpenSettings}
@@ -254,6 +288,13 @@ function ProjectList({
             className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
           >
             <Brain size={14} />
+          </button>
+          <button
+            onClick={onOpenPreferences}
+            title="设置"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
+          >
+            <Settings size={14} />
           </button>
           {!showArchived && (
             <button
@@ -385,6 +426,41 @@ export default function App() {
   const refreshProjects = useApp((s) => s.refreshProjects);
   const loadBackend = useApp((s) => s.loadBackend);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [detailCollapsed, setDetailCollapsed] = useState(false);
+  const prevWinSize = useRef<{ w: number; h: number } | null>(null);
+
+  // 折叠右侧详情时把窗口缩到「列表 + 右缘窄条」宽度，展开时恢复原尺寸。
+  // tauri.conf.json 有 minWidth 900，需先放宽最小尺寸，恢复时再设回。
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let cancelled = false;
+    async function apply() {
+      if (detailCollapsed) {
+        const [size, scale] = await Promise.all([
+          win.innerSize(),
+          win.scaleFactor(),
+        ]);
+        if (cancelled) return;
+        if (!prevWinSize.current) {
+          prevWinSize.current = { w: size.width / scale, h: size.height / scale };
+        }
+        const w = (sidebarCollapsed ? 40 : 288) + 40;
+        await win.setMinSize(new LogicalSize(w, 400));
+        await win.setSize(new LogicalSize(w, prevWinSize.current.h));
+      } else if (prevWinSize.current) {
+        const { w, h } = prevWinSize.current;
+        prevWinSize.current = null;
+        await win.setSize(new LogicalSize(w, h));
+        await win.setMinSize(new LogicalSize(900, 600));
+      }
+    }
+    apply().catch((e) => console.error("resize window failed:", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [detailCollapsed, sidebarCollapsed]);
 
   useEffect(() => {
     initTheme();
@@ -420,9 +496,33 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <ProjectList items={items} onOpenSettings={() => setSettingsOpen(true)} />
-      <ProjectDetail project={selected} />
+      <ProjectList
+        items={items}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenPreferences={() => setPrefsOpen(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+      />
+      {/* 详情折叠时不卸载（保留编辑中状态与自动保存定时器），仅隐藏 */}
+      <div className={`flex flex-1 ${detailCollapsed ? "hidden" : ""}`}>
+        <ProjectDetail
+          project={selected}
+          onCollapse={() => setDetailCollapsed(true)}
+        />
+      </div>
+      {detailCollapsed && (
+        <aside className="flex h-full w-10 flex-col items-center gap-2 border-l border-white/60 bg-white/55 py-2 backdrop-blur-xl">
+          <button
+            onClick={() => setDetailCollapsed(false)}
+            title="展开任务详情"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-white/60 bg-white/70 text-gray-600 transition hover:bg-white hover:text-gray-900"
+          >
+            <ChevronsLeft size={14} />
+          </button>
+        </aside>
+      )}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {prefsOpen && <PreferencesPanel onClose={() => setPrefsOpen(false)} />}
     </div>
   );
 }

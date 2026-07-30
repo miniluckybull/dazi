@@ -117,6 +117,13 @@ export function MarkdownEditor({
         [Crepe.Feature.Toolbar]: {
           buildToolbar,
         },
+        // 块拖拽手柄（hover 出现的 ⠿/➕）：默认与块间距 16px 过大，
+        // 收到 4px，配合 CSS 紧凑化与加宽的左侧 gutter，避免 flip 溢出窗口。
+        [Crepe.Feature.BlockEdit]: {
+          blockHandle: {
+            getOffset: () => 4,
+          },
+        },
       },
     });
     let destroyed = false;
@@ -127,8 +134,32 @@ export function MarkdownEditor({
       });
     });
     crepe.create();
+
+    // Crepe 工具栏用 floating-ui shift() 定位，只校正垂直方向；
+    // 选中靠左文字时面板会溢出宿主左边界被 overflow 裁剪导致点不到。
+    // 这里监听其内联样式变化，把水平位置钳制在宿主可视范围内。
+    const clampToolbar = () => {
+      const tb = host.querySelector<HTMLElement>(".milkdown-toolbar");
+      if (!tb || tb.dataset.show !== "true") return;
+      tb.style.transform = "";
+      const hostRect = host.getBoundingClientRect();
+      const tbRect = tb.getBoundingClientRect();
+      let dx = 0;
+      if (tbRect.left < hostRect.left + 4) dx = hostRect.left + 4 - tbRect.left;
+      else if (tbRect.right > hostRect.right - 4)
+        dx = hostRect.right - 4 - tbRect.right;
+      if (dx) tb.style.transform = `translateX(${dx}px)`;
+    };
+    const observer = new MutationObserver(clampToolbar);
+    observer.observe(host, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["style", "data-show"],
+    });
+
     return () => {
       destroyed = true;
+      observer.disconnect();
       crepe.destroy();
     };
     // 仅挂载时初始化；defaultValue 变化由外层 key 触发重建

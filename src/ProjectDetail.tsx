@@ -15,6 +15,7 @@ import {
   Bot,
   SquareTerminal,
   RefreshCw,
+  ChevronsRight,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
@@ -142,7 +143,13 @@ function AgentModeToggle() {
   );
 }
 
-export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
+export function ProjectDetail({
+  project,
+  onCollapse,
+}: {
+  project: ProjectSummary | null;
+  onCollapse: () => void;
+}) {
   const readReadme = useApp((s) => s.readReadme);
   const writeReadme = useApp((s) => s.writeReadme);
   const importReferences = useApp((s) => s.importReferences);
@@ -453,6 +460,12 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                 <IconButton title="提炼为 skill" onClick={callExtractSkill} emphasis>
                   <Sparkles size={15} />
                 </IconButton>
+                <IconButton
+                  title="折叠右侧详情面板（仅看任务列表，点窗口最右缘展开）"
+                  onClick={onCollapse}
+                >
+                  <ChevronsRight size={15} />
+                </IconButton>
               </>
             ) : (
               <>
@@ -499,6 +512,12 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                     <RefreshCw size={15} />
                   </IconButton>
                 )}
+                <IconButton
+                  title="折叠右侧详情面板（仅看任务列表，点窗口最右缘展开）"
+                  onClick={onCollapse}
+                >
+                  <ChevronsRight size={15} />
+                </IconButton>
               </>
             )}
           </div>
