@@ -1,6 +1,6 @@
 [package]
 name = "dazi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Dazi - 本地任务文件夹管理 + Claude Code 一键交接"
 authors = ["wxw"]
 edition = "2021"
