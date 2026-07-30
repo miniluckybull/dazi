@@ -149,72 +149,107 @@ body {
   --crepe-color-inline-area: #342c58;
 }
 .crepe-host .milkdown .ProseMirror {
-  /* 左侧留出 48px gutter 给块拖拽手柄（⠿/➕），避免其 flip 到文本上或溢出窗口 */
-  padding: 16px 28px 48px 48px;
-  font-size: 14px;
+  /* 左侧 gutter 容纳块手柄（➕，20px + 4px 偏移），避免其 flip 到文本上或溢出窗口 */
+  padding: 14px 28px 48px 32px;
+  /* 字号/行高对齐终端（13px / 1.25），散文行高取 1.4 */
+  font-size: 13px;
+  line-height: 1.4;
 }
-/* Crepe reset.css 默认标题过大（h1=42px），收敛到文档编辑舒适字号 */
+/* 标题：收敛层级反差，节奏贴近正文 */
 .crepe-host .milkdown .ProseMirror h1 {
-  font-size: 23px;
+  font-size: 19px;
   font-weight: 700;
   line-height: 1.3;
-  margin: 0.6em 0 0.35em;
+  margin: 0.5em 0 0.25em;
   padding-bottom: 0.2em;
   border-bottom: 2px solid rgb(var(--c-accent) / 0.25);
 }
 .crepe-host .milkdown .ProseMirror h2 {
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.35;
-  margin: 0.65em 0 0.3em;
+  margin: 0.55em 0 0.25em;
 }
 .crepe-host .milkdown .ProseMirror h3 {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
-  margin: 0.65em 0 0.3em;
-}
-.crepe-host .milkdown .ProseMirror h4 {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
-  margin: 0.6em 0 0.25em;
+  margin: 0.55em 0 0.2em;
+}
+.crepe-host .milkdown .ProseMirror h4 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.5em 0 0.2em;
 }
 .crepe-host .milkdown .ProseMirror h5 {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   line-height: 1.4;
-  margin: 0.6em 0 0.25em;
+  margin: 0.5em 0 0.2em;
 }
 .crepe-host .milkdown .ProseMirror h6 {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
-  margin: 0.6em 0 0.25em;
+  margin: 0.5em 0 0.2em;
   color: rgb(var(--c-gray-500));
 }
-/* 段落与正文：行距拉宽，提升长文可读性（反馈 #8） */
+/* 段落：reset.css 给 p 写死了 16px/24px/padding 4px 0，必须显式覆盖，
+   否则容器上的 13px 不生效，正文永远比终端大一号 */
 .crepe-host .milkdown .ProseMirror p {
-  line-height: 1.7;
-  margin: 0.5em 0;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 0;
+  margin: 0.2em 0;
+}
+/* 列表序号与首行文本垂直居中：label-wrapper 默认写死 32px（为 16px/32px 行高设计），
+   改为与文本行高等高（1.4em），flex 居中后即与第一行严格对齐 */
+.crepe-host .milkdown .milkdown-list-item-block li {
+  gap: 8px;
+  margin: 0.1em 0;
+}
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper {
+  height: 1.4em;
+  width: 22px;
+}
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper .label {
+  height: auto;
+  width: 22px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  width: 14px;
+  height: 14px;
+}
+/* 列表项内的段落不再加段距，避免序号与文本错位 */
+.crepe-host .milkdown .milkdown-list-item-block li .children > p {
+  margin: 0;
+  padding: 0;
 }
 /* 引用块：左侧品牌色竖条 + 浅底，强化与正文区分（反馈 #8） */
 .crepe-host .milkdown .ProseMirror blockquote {
-  margin: 0.8em 0;
-  padding: 0.4em 0.9em;
-  border-left: 4px solid rgb(var(--c-accent) / 0.8);
+  margin: 0.4em 0;
+  padding: 0.25em 0.9em;
+  border-left: 3px solid rgb(var(--c-accent) / 0.8);
   background: rgb(var(--c-accent-soft) / 0.5);
   border-radius: 0 6px 6px 0;
   color: rgb(var(--c-gray-600));
 }
+/* reset.css 还会用 ::before 再画一条竖条，与 border-left 重叠，去掉 */
+.crepe-host .milkdown .ProseMirror blockquote::before {
+  display: none;
+}
 /* 代码块：圆角 + 等宽 + 轻底，区分正文（反馈 #8） */
 .crepe-host .milkdown .ProseMirror pre {
   border-radius: 8px;
-  padding: 0.8em 1em;
+  padding: 0.6em 0.9em;
   background: rgb(var(--c-gray-100) / 0.7);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12.5px;
+  line-height: 1.4;
   overflow-x: auto;
 }
 .crepe-host .milkdown .ProseMirror code {
@@ -265,7 +300,7 @@ body {
   margin: 5px 2px;
 }
 
-/* ── 块拖拽手柄（⠿/➕）：紧凑化以适配左侧 gutter ── */
+/* ── 块手柄（➕）：紧凑化；⠿ 拖拽排序失效且可被剪切粘贴替代，隐藏 ── */
 .crepe-host .milkdown .milkdown-block-handle {
   gap: 1px;
 }
@@ -277,4 +312,47 @@ body {
 .crepe-host .milkdown .milkdown-block-handle .operation-item svg {
   width: 14px;
   height: 14px;
+}
+/* DOM 顺序：➕ 在前、⠿ 在后，隐藏后者 */
+.crepe-host .milkdown .milkdown-block-handle .operation-item:last-child {
+  display: none;
+}
+
+/* ── ➕ / 斜杠插入面板（slash menu）：字号与间距对齐整体紧凑排版 ── */
+.crepe-host .milkdown .milkdown-slash-menu {
+  border-radius: 8px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .tab-group {
+  padding: 8px 8px 0;
+}
+.crepe-host .milkdown .milkdown-slash-menu .tab-group ul {
+  padding: 4px 6px;
+  gap: 6px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .tab-group ul li {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .menu-groups {
+  padding: 0 8px 8px;
+  max-height: 320px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .menu-groups .menu-group h6 {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 8px 8px 4px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .menu-groups .menu-group li {
+  min-width: 180px;
+  gap: 10px;
+  padding: 6px 8px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .menu-groups .menu-group li svg {
+  width: 16px;
+  height: 16px;
+}
+.crepe-host .milkdown .milkdown-slash-menu .menu-groups .menu-group li > span {
+  font-size: 12px;
+  line-height: 18px;
 }

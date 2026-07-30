@@ -362,8 +362,12 @@ export function ProjectDetail({
       .onDragDropEvent(async (event) => {
         if (cancelled) return;
         const payload: any = event.payload;
-        if (payload.type === "over" || payload.type === "enter") {
-          setDragOver(true);
+        if (payload.type === "enter") {
+          // enter 携带 paths：只有拖入文件才显示导入遮罩；
+          // 编辑器内部 HTML5 拖拽（如块手柄 ⠿ 排序）paths 为空，直接忽略。
+          setDragOver(((payload.paths as string[]) ?? []).length > 0);
+        } else if (payload.type === "over") {
+          // over 不携带 paths，保持 enter 时确定的状态
         } else if (payload.type === "leave") {
           setDragOver(false);
         } else if (payload.type === "drop") {
@@ -581,7 +585,7 @@ export function ProjectDetail({
         {tab === "readme" ? (
           <section className="flex flex-1 flex-col overflow-hidden bg-white/70 backdrop-blur-sm">
             <div className="shrink-0 border-b border-white/60 px-4 py-1 text-[11px] text-gray-400">
-              选中文字可加粗/标题/列表 · 输入 / 插入块 · 拖动 ⠿ 排序
+              选中文字可加粗/标题/列表 · 输入 / 或点行首 ➕ 插入块
             </div>
             <div className="flex-1 overflow-y-auto">
               {readmeLoadedSlug === project.slug && (

@@ -138,17 +138,23 @@ export function MarkdownEditor({
     // Crepe 工具栏用 floating-ui shift() 定位，只校正垂直方向；
     // 选中靠左文字时面板会溢出宿主左边界被 overflow 裁剪导致点不到。
     // 这里监听其内联样式变化，把水平位置钳制在宿主可视范围内。
+    // 注意：必须「值变了才写」，否则写 style 又触发 observer，微任务死循环卡死 UI。
     const clampToolbar = () => {
       const tb = host.querySelector<HTMLElement>(".milkdown-toolbar");
       if (!tb || tb.dataset.show !== "true") return;
-      tb.style.transform = "";
+      const cur = /translateX\((-?[\d.]+)px\)/.exec(tb.style.transform);
+      const curDx = cur ? parseFloat(cur[1]) : 0;
       const hostRect = host.getBoundingClientRect();
       const tbRect = tb.getBoundingClientRect();
+      // 还原 floating-ui 原始位置（去掉上次的钳制偏移）再判断
+      const rawLeft = tbRect.left - curDx;
+      const rawRight = tbRect.right - curDx;
       let dx = 0;
-      if (tbRect.left < hostRect.left + 4) dx = hostRect.left + 4 - tbRect.left;
-      else if (tbRect.right > hostRect.right - 4)
-        dx = hostRect.right - 4 - tbRect.right;
-      if (dx) tb.style.transform = `translateX(${dx}px)`;
+      if (rawLeft < hostRect.left + 4) dx = hostRect.left + 4 - rawLeft;
+      else if (rawRight > hostRect.right - 4)
+        dx = hostRect.right - 4 - rawRight;
+      const want = dx ? `translateX(${dx}px)` : "";
+      if (tb.style.transform !== want) tb.style.transform = want;
     };
     const observer = new MutationObserver(clampToolbar);
     observer.observe(host, {
