@@ -47,6 +47,10 @@ pub struct ProjectMeta {
     pub runs: Vec<RunRecord>,
     #[serde(default)]
     pub next_run_at: Option<DateTime<Utc>>,
+    /// 任务级指定要注入的个人 skill（~/.claude/skills/ 下的 slug），
+    /// 交接/自动执行时写入 prompt 强制使用（见 prompt.rs）。
+    #[serde(default)]
+    pub skills: Vec<String>,
 }
 
 fn default_task_type() -> String {
@@ -239,6 +243,7 @@ pub fn create_project_with(
         on_trigger: None,
         runs: vec![],
         next_run_at: None,
+        skills: vec![],
     };
     write_meta(&project_path, &meta)?;
 
@@ -323,6 +328,7 @@ pub fn create_project_from_path(
         on_trigger: None,
         runs: vec![],
         next_run_at: None,
+        skills: vec![],
     };
     write_meta(&source, &meta)?;
 
@@ -454,6 +460,7 @@ pub struct MetaPatch {
     pub due_date: Option<Option<String>>,
     pub requires_references: Option<bool>,
     pub name: Option<String>,
+    pub skills: Option<Vec<String>>,
 }
 
 pub fn update_meta(project_path: &Path, patch: MetaPatch) -> Result<ProjectMeta, String> {
@@ -475,6 +482,13 @@ pub fn update_meta(project_path: &Path, patch: MetaPatch) -> Result<ProjectMeta,
     }
     if let Some(v) = patch.requires_references {
         meta.requires_references = v;
+    }
+    if let Some(v) = patch.skills {
+        // 只保留合法 slug，防止非法值进入 prompt 拼装
+        meta.skills = v
+            .into_iter()
+            .filter(|s| crate::skills::validate_slug(s).is_ok())
+            .collect();
     }
     if let Some(v) = patch.name {
         let trimmed = v.trim();
