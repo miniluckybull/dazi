@@ -30,3 +30,6 @@ src-tauri/gen/schemas
 
 # 本地部署进度文件（含内网 IP/主机/中转等环境专属信息，不入库）
 PROGRESS.md
+
+# 公众号宣传稿与截图（本地素材，不入库）
+docs/
