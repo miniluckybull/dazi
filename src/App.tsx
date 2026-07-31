@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useApp, ProjectSummary, ProjectInit, TaskType } from "./store";
 import { ProjectDetail } from "./ProjectDetail";
+import { SkillDetail } from "./SkillDetail";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThemePref, cycleTheme, getThemePref, initTheme, onThemeChange } from "./theme";
 import "./App.css";
@@ -183,6 +184,12 @@ function ProjectList({
   const selectProject = useApp((s) => s.selectProject);
   const showArchived = useApp((s) => s.showArchived);
   const setShowArchived = useApp((s) => s.setShowArchived);
+  const showSkills = useApp((s) => s.showSkills);
+  const setShowSkills = useApp((s) => s.setShowSkills);
+  const skills = useApp((s) => s.skills);
+  const refreshSkills = useApp((s) => s.refreshSkills);
+  const selectedSkillSlug = useApp((s) => s.selectedSkillSlug);
+  const selectSkill = useApp((s) => s.selectSkill);
   const deleteProject = useApp((s) => s.deleteProject);
   const revealReferences = useApp((s) => s.revealReferences);
   const refreshProjects = useApp((s) => s.refreshProjects);
@@ -190,13 +197,14 @@ function ProjectList({
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    if (showArchived) return;
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     getCurrentWindow()
       .onFocusChanged((ev) => {
         if (cancelled) return;
-        if (ev.payload) refreshProjects();
+        if (!ev.payload) return;
+        if (showSkills) refreshSkills();
+        else if (!showArchived) refreshProjects();
       })
       .then((un) => {
         if (cancelled) un();
@@ -206,7 +214,7 @@ function ProjectList({
       cancelled = true;
       unlisten?.();
     };
-  }, [showArchived, refreshProjects]);
+  }, [showArchived, showSkills, refreshProjects, refreshSkills]);
 
   async function remove(p: ProjectSummary, e: React.MouseEvent) {
     e.stopPropagation();
@@ -227,7 +235,7 @@ function ProjectList({
     <aside className="flex h-full w-72 flex-col border-r border-white/60 bg-white/55 backdrop-blur-xl">
       <div className="flex items-center justify-between border-b border-white/60 px-4 py-3">
         <h2 className="text-sm font-semibold text-gray-700">
-          {showArchived ? "已归档" : "工作任务"}
+          {showSkills ? "技能" : showArchived ? "已归档" : "工作任务"}
         </h2>
         <div className="flex items-center gap-1.5">
           <ThemeToggle />
@@ -238,7 +246,7 @@ function ProjectList({
           >
             <Brain size={14} />
           </button>
-          {!showArchived && (
+          {!showArchived && !showSkills && (
             <button
               onClick={() => setCreating((v) => !v)}
               className="rounded-md bg-accent/90 px-2 py-1 text-xs font-medium text-on-accent shadow-sm shadow-accent/20 transition hover:bg-accent"
@@ -252,7 +260,7 @@ function ProjectList({
         <button
           onClick={() => setShowArchived(false)}
           className={`flex-1 py-1.5 transition ${
-            !showArchived
+            !showArchived && !showSkills
               ? "bg-white/60 font-medium text-gray-800"
               : "text-gray-500 hover:bg-white/30"
           }`}
@@ -262,18 +270,65 @@ function ProjectList({
         <button
           onClick={() => setShowArchived(true)}
           className={`flex-1 py-1.5 transition ${
-            showArchived
+            showArchived && !showSkills
               ? "bg-white/60 font-medium text-gray-800"
               : "text-gray-500 hover:bg-white/30"
           }`}
         >
           归档
         </button>
+        <button
+          onClick={() => setShowSkills(true)}
+          className={`flex-1 py-1.5 transition ${
+            showSkills
+              ? "bg-white/60 font-medium text-gray-800"
+              : "text-gray-500 hover:bg-white/30"
+          }`}
+        >
+          技能
+        </button>
       </div>
-      {creating && !showArchived && (
+      {creating && !showArchived && !showSkills && (
         <NewTaskForm onCancel={() => setCreating(false)} />
       )}
       <div className="flex-1 overflow-y-auto">
+        {showSkills ? (
+          <>
+            {skills.length === 0 && (
+              <p className="px-4 py-8 text-center text-sm text-gray-400">
+                还没有技能，归档任务后点「提炼为 skill」
+              </p>
+            )}
+            {skills.map((sk) => {
+              const active = selectedSkillSlug === sk.slug;
+              return (
+                <div
+                  key={sk.slug}
+                  onClick={() => selectSkill(sk.slug)}
+                  className={`block w-full cursor-pointer border-b border-white/60 border-l-4 border-l-accent/70 px-4 py-3 text-left transition ${
+                    active
+                      ? "bg-accent-soft/90 shadow-inner ring-1 ring-inset ring-accent-border/70"
+                      : "hover:bg-white/50"
+                  }`}
+                >
+                  <div
+                    className={`truncate text-sm font-medium ${
+                      active ? "text-accent-text" : "text-gray-800"
+                    }`}
+                  >
+                    {sk.slug}
+                  </div>
+                  {sk.description && (
+                    <div className="mt-0.5 line-clamp-2 text-[11px] text-gray-400">
+                      {sk.description}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        ) : (
+        <>
         {items.length === 0 && (
           <p className="px-4 py-8 text-center text-sm text-gray-400">
             {showArchived
@@ -363,6 +418,8 @@ function ProjectList({
           </div>
           );
         })}
+        </>
+        )}
       </div>
     </aside>
   );
@@ -373,6 +430,7 @@ export default function App() {
   const projects = useApp((s) => s.projects);
   const archived = useApp((s) => s.archived);
   const showArchived = useApp((s) => s.showArchived);
+  const showSkills = useApp((s) => s.showSkills);
   const selectedSlug = useApp((s) => s.selectedSlug);
   const loadConfig = useApp((s) => s.loadConfig);
   const refreshProjects = useApp((s) => s.refreshProjects);
@@ -412,7 +470,7 @@ export default function App() {
   return (
     <div className="flex h-full">
       <ProjectList items={items} onOpenSettings={() => setSettingsOpen(true)} />
-      <ProjectDetail project={selected} />
+      {showSkills ? <SkillDetail /> : <ProjectDetail project={selected} />}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );

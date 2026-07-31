@@ -240,12 +240,14 @@ fn synthesize_patterns(_app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
+fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<String, String> {
     if !project_path.exists() {
         return Err(format!("项目不存在: {}", project_path.display()));
     }
     let cfg = config::load()?;
     let meta = project::read_meta(&project_path)?;
+    // slug 直接拼进 shell 命令与路径，必须先校验字符集
+    dazi_core::skills::validate_slug(&meta.slug)?;
     let readme = project::read_readme(&project_path).unwrap_or_default();
     let context = memory::read_project(&project_path, "context.md").unwrap_or_default();
     let journal = memory::read_project(&project_path, "journal.md").unwrap_or_default();
@@ -253,7 +255,8 @@ fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), St
     let home = std::env::var("HOME").map_err(|e| format!("无法读取 HOME: {e}"))?;
     let dazi_dir = PathBuf::from(&home).join(".dazi");
     std::fs::create_dir_all(&dazi_dir).map_err(|e| format!("创建 ~/.dazi 失败: {e}"))?;
-    let temp_path = dazi_dir.join(".extract-skill-input.md");
+    // 临时文件带 slug，避免两个提炼会话并发互踩
+    let temp_path = dazi_dir.join(format!(".extract-skill-input-{}.md", meta.slug));
     let combined = format!(
         "# 任务名称\n{}\n\n# slug\n{}\n\n# README.md\n{}\n\n# context.md\n{}\n\n# journal.md\n{}\n",
         meta.name,
@@ -265,24 +268,47 @@ fn extract_skill(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), St
     std::fs::write(&temp_path, &combined).map_err(|e| format!("写入临时文件失败: {e}"))?;
 
     let temp_str = temp_path.display().to_string();
-    let skill_dir = format!("~/.claude/skills/{}", meta.slug);
+    // 用展开后的绝对路径：~ 是否被 Write 工具展开取决于模型行为，不可靠
+    let skill_dir = format!("{home}/.claude/skills/{}", meta.slug);
     let skill_path = format!("{skill_dir}/SKILL.md");
     let prompt = format!(
         "这是 dazi 工作搭子的「提炼为 skill」流程,请按下列步骤执行:\n\n\
-         1. 用 Read 工具读取 {temp_str},里面是这次任务的 README、context、journal\n\
-         2. 把这次任务沉淀的可复用经验提炼成一个 Claude Code skill,目标路径 {skill_path}\n\
-         3. 用 Bash 执行 `mkdir -p {skill_dir}` 确保目录存在\n\
-         4. 用 Write 工具写入 {skill_path},内容必须是合法的 Claude Code skill 格式:\n   \
+         1. 用 Read 工具读取 \"{temp_str}\",里面是这次任务的 README、context、journal\n\
+         2. 把这次任务沉淀的可复用经验提炼成一个 Claude Code skill,目标路径 \"{skill_path}\"\n\
+         3. 用 Bash 执行 `mkdir -p \"{skill_dir}\"` 确保目录存在\n\
+         4. 用 Write 工具写入 \"{skill_path}\",内容必须是合法的 Claude Code skill 格式:\n   \
             开头是 frontmatter,包含 name(用 slug)和 description(一句话说明何时启用该 skill);\n   \
             正文用 markdown 描述触发场景、关键步骤、易踩的坑、可复用的命令或片段\n\
          5. 只总结真正可复用的经验,一次性的细节不要写进去\n\
-         6. 完成后用 Bash 执行 `rm {temp_str}` 删除临时文件"
+         6. 完成后用 Bash 执行 `rm \"{temp_str}\"` 删除临时文件"
     );
 
     let kind = read_terminal_kind(&cfg.workspace);
     let cmd = format!("claude \"{}\"", escape_applescript(&prompt));
     run_in_terminal(&kind, &dazi_dir, Some(&cmd))?;
-    Ok(())
+    Ok(skill_path)
+}
+
+/// 列出个人技能（~/.claude/skills/，归档任务提炼产物）。
+#[tauri::command]
+fn list_skills() -> Vec<dazi_core::skills::Skill> {
+    dazi_core::skills::list_skills().unwrap_or_default()
+}
+
+#[tauri::command]
+fn read_skill(slug: String) -> Result<String, String> {
+    dazi_core::skills::read_skill(&slug)
+}
+
+#[tauri::command]
+fn delete_skill(slug: String) -> Result<(), String> {
+    dazi_core::skills::delete_skill(&slug)
+}
+
+/// 探测指定任务的提炼产物是否已生成（提炼状态可见 + 完成轮询用）。
+#[tauri::command]
+fn skill_exists(slug: String) -> bool {
+    dazi_core::skills::skill_exists(&slug)
 }
 
 #[tauri::command]
@@ -518,6 +544,31 @@ pub fn run() {
             // 升级迁移：把旧版 Tauri 配置目录下的 config.json 迁到 ~/.dazi/config.json，
             // 保证已设置 workspace 的老用户升级后不丢失配置。
             config::migrate_legacy_config(app.handle());
+            // 兜底清理上次残留的提炼临时文件（会话异常退出时模型没来得及 rm）；
+            // 只清超过 1 小时的，避免误删正在进行的提炼会话的输入。
+            if let Ok(home) = std::env::var("HOME") {
+                let dazi_dir = PathBuf::from(home).join(".dazi");
+                if let Ok(rd) = std::fs::read_dir(&dazi_dir) {
+                    for entry in rd.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if !name.starts_with(".extract-skill-input-") {
+                            continue;
+                        }
+                        let stale = entry
+                            .metadata()
+                            .and_then(|m| m.modified())
+                            .map(|t| {
+                                t.elapsed()
+                                    .map(|e| e > std::time::Duration::from_secs(3600))
+                                    .unwrap_or(false)
+                            })
+                            .unwrap_or(false);
+                        if stale {
+                            let _ = std::fs::remove_file(entry.path());
+                        }
+                    }
+                }
+            }
             let handle = app.handle().clone();
             // 正在运行中的 autopilot 任务路径，防止 60s tick 在上一次还没跑完时重复触发。
             let in_flight: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
@@ -600,6 +651,10 @@ pub fn run() {
             synthesize_patterns,
             unarchive_project,
             extract_skill,
+            list_skills,
+            read_skill,
+            delete_skill,
+            skill_exists,
             run_autopilot_now,
             get_terminal_mode,
             pty::pty_open,

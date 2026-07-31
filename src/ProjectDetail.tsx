@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
+import { SkillPickerModal } from "./SkillPicker";
 import { MemoryPanel } from "./MemoryPanel";
 import { ActivityPanel } from "./ActivityPanel";
 import { MarkdownEditor } from "./MarkdownEditor";
@@ -116,6 +117,10 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const archiveProject = useApp((s) => s.archiveProject);
   const unarchiveProject = useApp((s) => s.unarchiveProject);
   const extractSkill = useApp((s) => s.extractSkill);
+  const skillExists = useApp((s) => s.skillExists);
+  const refreshSkills = useApp((s) => s.refreshSkills);
+  const setShowSkills = useApp((s) => s.setShowSkills);
+  const selectSkill = useApp((s) => s.selectSkill);
   const runAutopilotNow = useApp((s) => s.runAutopilotNow);
   const refreshProjects = useApp((s) => s.refreshProjects);
   const readProfile = useApp((s) => s.readProfile);
@@ -132,6 +137,10 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<"readme" | "terminal" | "activity" | "memory">("readme");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [skillExtracted, setSkillExtracted] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractNote, setExtractNote] = useState<string | null>(null);
   const [autopiloting, setAutopiloting] = useState(false);
   const [memoryLayers, setMemoryLayers] = useState({
     profile: false,
@@ -161,14 +170,57 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
     await unarchiveProject(project.path);
   }
 
+  // 归档任务：探测是否已提炼过 skill（直接查产物文件，用户手动删过也准确）
+  useEffect(() => {
+    setSkillExtracted(false);
+    setExtractNote(null);
+    if (!project?.archived) return;
+    let cancelled = false;
+    skillExists(project.slug)
+      .then((v) => {
+        if (!cancelled) setSkillExtracted(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.slug, project?.archived, skillExists]);
+
   async function callExtractSkill() {
     if (!project) return;
+    const exists = await skillExists(project.slug).catch(() => false);
     const ok = await ask(
-      `把这次任务提炼为 Claude Code skill？\n会启动一个 Claude 会话，写入 ~/.claude/skills/${project.slug}/SKILL.md。`,
-      { title: "提炼为 skill", kind: "info" }
+      exists
+        ? `「${project.slug}」已提炼过 skill，重新提炼会覆盖\n~/.claude/skills/${project.slug}/SKILL.md。继续？`
+        : `把这次任务提炼为 Claude Code skill？\n会启动一个 Claude 会话，写入 ~/.claude/skills/${project.slug}/SKILL.md。`,
+      { title: exists ? "重新提炼" : "提炼为 skill", kind: "info" }
     );
     if (!ok) return;
     await extractSkill(project.path);
+    if (exists) {
+      // 重新提炼：产物已存在，无法靠「出现」探测，只提示会话已启动
+      setExtractNote("提炼会话已启动，完成后可到「技能」页查看");
+      setTimeout(() => setExtractNote(null), 6000);
+      return;
+    }
+    // 首次提炼：轮询产物出现（Claude 会话异步执行，最长等 5 分钟）
+    setExtracting(true);
+    setExtractNote("提炼中，请在终端完成会话…");
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const done = await skillExists(project.slug).catch(() => false);
+      if (done) {
+        setExtracting(false);
+        setSkillExtracted(true);
+        setExtractNote("✓ 已生成 skill");
+        refreshSkills();
+        setTimeout(() => setExtractNote(null), 4000);
+        return;
+      }
+    }
+    setExtracting(false);
+    setExtractNote("未检测到 skill 生成，请检查终端会话");
+    setTimeout(() => setExtractNote(null), 8000);
   }
 
   async function callClaude() {
@@ -360,14 +412,38 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                 导入中…
               </span>
             )}
+            {extractNote && (
+              <span className="mr-1 text-[11px] text-gray-400">
+                {extractNote}
+              </span>
+            )}
             <MemoryBadge layers={memoryLayers} />
             {project.archived ? (
               <>
                 <IconButton title="回到活动区" onClick={unarchive}>
                   <ArchiveRestore size={15} />
                 </IconButton>
-                <IconButton title="提炼为 skill" onClick={callExtractSkill} emphasis>
-                  <Sparkles size={15} />
+                {skillExtracted && (
+                  <button
+                    title="已提炼，点击到「技能」页查看"
+                    onClick={() => {
+                      setShowSkills(true);
+                      selectSkill(project.slug);
+                    }}
+                    className="flex h-8 items-center rounded-md border border-accent-border/70 bg-accent-soft/80 px-2 text-[11px] text-accent-text transition hover:bg-accent-soft"
+                  >
+                    已提炼
+                  </button>
+                )}
+                <IconButton
+                  title={skillExtracted ? "重新提炼为 skill（覆盖已有）" : "提炼为 skill"}
+                  onClick={callExtractSkill}
+                  emphasis
+                >
+                  <Sparkles
+                    size={15}
+                    className={extracting ? "animate-pulse text-amber-600" : ""}
+                  />
                 </IconButton>
               </>
             ) : (
@@ -380,6 +456,12 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
                   {taskTypeIcon(project.task_type)}
                   <ChevronDown size={11} />
                 </button>
+                <IconButton
+                  title="注入技能（启动协作/自动执行时强制使用勾选的 skill）"
+                  onClick={() => setSkillsOpen(true)}
+                >
+                  <Sparkles size={15} />
+                </IconButton>
                 {project.task_type !== "oneoff" && (
                   <IconButton
                     title={autopiloting ? "自动执行中…" : "立即自动执行一次"}
@@ -507,6 +589,11 @@ export function ProjectDetail({ project }: { project: ProjectSummary | null }) {
         project={project}
         open={scheduleOpen}
         onClose={() => setScheduleOpen(false)}
+      />
+      <SkillPickerModal
+        project={project}
+        open={skillsOpen}
+        onClose={() => setSkillsOpen(false)}
       />
     </main>
   );

@@ -83,6 +83,8 @@ export interface ProjectMeta {
   on_trigger: OnTrigger | null;
   runs: RunRecord[];
   next_run_at: string | null;
+  /** 任务级指定注入的个人 skill（~/.claude/skills/ 下的 slug） */
+  skills: string[];
 }
 
 export interface MetaPatch {
@@ -93,6 +95,14 @@ export interface MetaPatch {
   due_date?: string | null;
   requires_references?: boolean;
   name?: string;
+  skills?: string[];
+}
+
+export interface Skill {
+  slug: string;
+  path: string;
+  description: string | null;
+  updated_at: string | null;
 }
 
 export interface ProjectInit {
@@ -117,6 +127,10 @@ interface AppState {
   projects: ProjectSummary[];
   archived: ProjectSummary[];
   showArchived: boolean;
+  /** 左侧栏「技能」视图：列出 ~/.claude/skills/ 个人 skill */
+  showSkills: boolean;
+  skills: Skill[];
+  selectedSkillSlug: string | null;
   selectedSlug: string | null;
   loading: boolean;
   error: string | null;
@@ -128,6 +142,9 @@ interface AppState {
   refreshProjects: () => Promise<void>;
   refreshArchived: () => Promise<void>;
   setShowArchived: (v: boolean) => void;
+  setShowSkills: (v: boolean) => void;
+  refreshSkills: () => Promise<void>;
+  selectSkill: (slug: string | null) => void;
   createProject: (name: string, init?: ProjectInit) => Promise<void>;
   linkExistingFolder: (path: string) => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
@@ -148,7 +165,12 @@ interface AppState {
   continueWithClaude: (projectPath: string) => Promise<void>;
   archiveProject: (projectPath: string) => Promise<void>;
   unarchiveProject: (projectPath: string) => Promise<void>;
-  extractSkill: (projectPath: string) => Promise<void>;
+  extractSkill: (projectPath: string) => Promise<string>;
+  /** 个人技能库（~/.claude/skills/，归档任务提炼产物） */
+  listSkills: () => Promise<Skill[]>;
+  readSkill: (slug: string) => Promise<string>;
+  deleteSkill: (slug: string) => Promise<void>;
+  skillExists: (slug: string) => Promise<boolean>;
   runAutopilotNow: (projectPath: string) => Promise<boolean>;
   setSchedule: (projectPath: string, patch: SchedulePatch) => Promise<ProjectMeta>;
   listDue: () => Promise<DueProject[]>;
@@ -174,6 +196,9 @@ export const useApp = create<AppState>((set, get) => ({
   projects: [],
   archived: [],
   showArchived: false,
+  showSkills: false,
+  skills: [],
+  selectedSkillSlug: null,
   selectedSlug: null,
   loading: false,
   error: null,
@@ -244,9 +269,25 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setShowArchived: (v) => {
-    set({ showArchived: v, selectedSlug: null });
+    set({ showArchived: v, showSkills: false, selectedSlug: null });
     if (v) get().refreshArchived();
   },
+
+  setShowSkills: (v) => {
+    set({ showSkills: v, selectedSkillSlug: null });
+    if (v) get().refreshSkills();
+  },
+
+  refreshSkills: async () => {
+    try {
+      const skills = await get().listSkills();
+      set({ skills });
+    } catch (e: any) {
+      set({ error: String(e) });
+    }
+  },
+
+  selectSkill: (slug) => set({ selectedSkillSlug: slug }),
 
   createProject: async (name, init) => {
     const { config } = get();
@@ -371,7 +412,21 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   extractSkill: async (projectPath) => {
-    await invoke("extract_skill", { projectPath });
+    // 返回预期的 SKILL.md 路径，前端据此轮询产物是否生成
+    return invoke<string>("extract_skill", { projectPath });
+  },
+
+  listSkills: async () => {
+    return invoke<Skill[]>("list_skills");
+  },
+  readSkill: async (slug) => {
+    return invoke<string>("read_skill", { slug });
+  },
+  deleteSkill: async (slug) => {
+    await invoke("delete_skill", { slug });
+  },
+  skillExists: async (slug) => {
+    return invoke<boolean>("skill_exists", { slug });
   },
 
   runAutopilotNow: async (projectPath) => {

@@ -8,3 +8,4 @@ pub mod memory;
 pub mod project;
 pub mod prompt;
 pub mod schedule;
+pub mod skills;

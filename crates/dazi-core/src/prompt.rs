@@ -151,6 +151,27 @@ pub fn build_context_sections(project_path: &Path) -> Vec<String> {
         ));
     }
 
+    // 任务级指定 skill：用户在 dazi 里勾选，注入后强制使用（比 Claude Code
+    // 自动发现更确定）；已不存在的 skill 静默跳过。
+    if let Ok(meta) = project::read_meta(project_path) {
+        let available: Vec<&String> = meta
+            .skills
+            .iter()
+            .filter(|s| crate::skills::skill_exists(s))
+            .collect();
+        if !available.is_empty() {
+            let mut lines = vec![
+                "## 指定技能（用户要求本任务必须使用）".to_string(),
+                "以下 skill 已安装在 ~/.claude/skills/，请用 Skill 工具逐个调用（或先 Read 对应 SKILL.md），并严格遵循其中的流程、步骤与易踩的坑："
+                    .to_string(),
+            ];
+            for s in available {
+                lines.push(format!("- {s}"));
+            }
+            sections.push(lines.join("\n"));
+        }
+    }
+
     sections
 }
 
