@@ -107,6 +107,54 @@ function isWindows(): boolean {
   return /Windows NT/i.test(navigator.userAgent);
 }
 
+/** 修复中文输入法直接上屏的全角标点（？：等）在终端丢失：
+ *  macOS 输入法对这类标点不走 composition 流程，只发 beforeinput/input；
+ *  xterm 只监听 composition* 和 keypress，感知不到 → 字符被吞。
+ *  这里在 beforeinput 阶段拦截（preventDefault 阻止落 DOM，不碰 textarea，
+ *  避免与 xterm 异步清空 textarea 的竞态），取 e.data 直接写 pty。
+ *  拼音选词等组合态（insertCompositionText/insertFromComposition）仍由 xterm 处理。 */
+function patchImeDirectInput(term: Terminal) {
+  const ta = term.textarea;
+  if (!ta) return;
+  // WKWebView 在 IME 直出全角标点后，会补发对应半角字符的 keydown（如 ？→ "?"），
+  // xterm 会把它当普通按键再发一次，需按映射吞掉。
+  const HALFWIDTH: Record<string, string> = {
+    "？": "?", "：": ":", "；": ";", "，": ",", "。": ".", "！": "!",
+    "（": "(", "）": ")", "【": "[", "】": "]", "《": "<", "》": ">",
+    "、": "\\", "“": '"', "”": '"', "‘": "'", "’": "'", "…": "^",
+    "·": "`", "￥": "$",
+  };
+  let lastInsert = { time: 0, data: "" };
+  let dropHalfwidthUntil = 0;
+
+  ta.addEventListener("beforeinput", (e) => {
+    const ie = e as InputEvent;
+    if (ie.isComposing || ie.inputType !== "insertText" || !ie.data) return;
+    e.preventDefault();
+    if (Date.now() < dropHalfwidthUntil && ie.data === HALFWIDTH[lastInsert.data]) {
+      // 补发 keydown 引发的 DOM 插入，丢弃
+      return;
+    }
+    lastInsert = { time: Date.now(), data: ie.data };
+    term.input(ie.data);
+  });
+
+  term.attachCustomKeyEventHandler((ev) => {
+    if (
+      ev.type === "keydown" &&
+      lastInsert.time &&
+      Date.now() - lastInsert.time < 200 &&
+      HALFWIDTH[lastInsert.data] === ev.key
+    ) {
+      // 返回 false 后 xterm 不处理也不 preventDefault，浏览器会继续插入该字符，
+      // 用 dropHalfwidthUntil 让上面的 beforeinput 拦截把它丢掉。
+      dropHalfwidthUntil = Date.now() + 200;
+      return false;
+    }
+    return true;
+  });
+}
+
 async function openPty(s: TermSession, launch: PtyLaunch, agentMode: boolean) {
   if (s.opening) return;
   s.opening = true;
@@ -167,6 +215,7 @@ export function ensureSession(
   host.style.height = "100%";
   const { term, fit } = createTerminal();
   term.open(host);
+  patchImeDirectInput(term);
   tryWebgl(term);
   const s: TermSession = { slug, cwd, term, fit, host, alive: false, opening: false };
   sessions.set(slug, s);
