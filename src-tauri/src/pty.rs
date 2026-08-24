@@ -27,6 +27,8 @@ pub enum PtyLaunch {
     Shell,
     /// 注入 handoff prompt 启动 claude，退出后回落 shell
     Handoff,
+    /// 注入 plan prompt 以 plan 模式启动 claude（只产计划不执行），退出后回落 shell
+    Plan,
     /// claude -c 继续上次会话，退出后回落 shell
     Continue,
 }
@@ -104,10 +106,11 @@ fn append_scrollback(scrollback: &Mutex<Vec<u8>>, data: &[u8]) {
     }
 }
 
-/// 构造 pty 内运行的命令。Handoff/Continue 都在后端 CLI 退出后 exec 回登录 shell，
+/// 构造 pty 内运行的命令。Handoff/Plan/Continue 都在后端 CLI 退出后 exec 回登录 shell，
 /// 保证会话不因 CLI 结束而关闭。
 /// agent_mode：仅 Handoff 生效。true 时走后端的 headless 模式（默认 claude：
 /// `claude -p --permission-mode bypassPermissions`），false 时保持交互式 TUI（反馈 #1）。
+/// Plan 始终交互式（`--permission-mode plan`，只读产计划），不受 agent_mode 影响。
 /// 后端选择从 ~/.dazi/config.json 读 "backend" 字段，回退到 claude。
 fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<CommandBuilder, String> {
     use dazi_core::backend;
@@ -147,6 +150,16 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 };
                 cmd.arg(format!("{action}; exec {shell} -l"));
             }
+            PtyLaunch::Plan => {
+                // 「先出计划」：交互式 plan 模式，claude CLI 只读产计划，用户确认后放行。
+                // agent_mode 不生效——plan 本身即只读，无需 bypassPermissions。
+                cmd.arg("-lc");
+                let p = prompt::build_handoff_plan_prompt(cwd);
+                cmd.arg(format!(
+                    "{}; exec {shell} -l",
+                    backend.build_interactive_plan_cmd(&p)
+                ));
+            }
             PtyLaunch::Continue => {
                 cmd.arg("-lc");
                 cmd.arg(format!("{}; exec {shell} -l", backend.build_continue_cmd()));
@@ -183,6 +196,21 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 } else {
                     cmd.arg(format!("chcp 65001 >nul & \"{bin}\" \"{escaped}\""));
                 }
+            }
+            PtyLaunch::Plan => {
+                let p = prompt::build_handoff_plan_prompt(cwd);
+                // 与 Handoff 相同的转义策略；仅 claude 后端透传 --permission-mode，
+                // 其它后端不支持时省略 flag，靠 prompt 约束只产计划。
+                let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
+                let flag = if backend.supports_permission_mode() {
+                    " --permission-mode plan"
+                } else {
+                    ""
+                };
+                cmd.arg("/K");
+                cmd.arg(format!(
+                    "chcp 65001 >nul & \"{bin}\"{flag} \"{escaped}\""
+                ));
             }
             PtyLaunch::Continue => {
                 cmd.arg("/K");
@@ -269,8 +297,8 @@ pub fn pty_open(
     sessions.insert(slug.clone(), session.clone());
     drop(sessions);
 
-    // handoff 启动即视为已交接，保持侧栏琥珀色逻辑
-    if launch == PtyLaunch::Handoff {
+    // handoff/plan 启动即视为已交接，保持侧栏琥珀色逻辑
+    if matches!(launch, PtyLaunch::Handoff | PtyLaunch::Plan) {
         let _ = project::mark_handed_off(&cwd);
     }
 
@@ -363,6 +391,11 @@ pub fn pty_launch(
                 format!("{}\r", claude.build_interactive_cmd(&p))
             }
         }
+        PtyLaunch::Plan => {
+            // 「先出计划」：plan 模式只读产计划，不走 headless/bypassPermissions。
+            let p = prompt::build_handoff_plan_prompt(&cwd);
+            format!("{}\r", claude.build_interactive_plan_cmd(&p))
+        }
         PtyLaunch::Continue => format!("{}\r", claude.build_continue_cmd()),
         PtyLaunch::Shell => unreachable!(),
     };
@@ -376,7 +409,7 @@ pub fn pty_launch(
         s.claude_launched.store(false, Ordering::SeqCst);
         write_result?;
     }
-    if launch == PtyLaunch::Handoff {
+    if matches!(launch, PtyLaunch::Handoff | PtyLaunch::Plan) {
         let _ = project::mark_handed_off(&cwd);
     }
     Ok(true)

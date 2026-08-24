@@ -18,6 +18,7 @@ import {
   SunMoon,
 } from "lucide-react";
 import { useApp, ProjectSummary, ProjectInit, TaskType } from "./store";
+import { TASK_TEMPLATES } from "./taskTemplates";
 import { ProjectDetail } from "./ProjectDetail";
 import { SkillDetail } from "./SkillDetail";
 import { SettingsPanel } from "./SettingsPanel";
@@ -103,6 +104,45 @@ function ThemeToggle() {
   );
 }
 
+/** 后端健康点：复用设置页「模型可用检测」的最近一次结果（绿=通过/黄=未检测/红=失败），
+ *  常驻侧栏底部，点击跳设置页。compact 用于折叠态（只显示圆点）。 */
+function HealthDot({
+  onOpenPreferences,
+  compact,
+}: {
+  onOpenPreferences: () => void;
+  compact?: boolean;
+}) {
+  const probeStatus = useApp((s) => s.probeStatus);
+  const probeAt = useApp((s) => s.probeAt);
+  const color =
+    probeStatus === "ok"
+      ? "bg-emerald-500"
+      : probeStatus === "fail"
+        ? "bg-red-500"
+        : "bg-amber-400";
+  const label =
+    probeStatus === "ok"
+      ? "后端正常"
+      : probeStatus === "fail"
+        ? "后端检测失败"
+        : "后端未检测";
+  const at = probeAt ? new Date(probeAt).toLocaleString() : "";
+  const title = at ? `${label}（最近检测：${at}），点击查看设置` : `${label}，点击去设置页检测`;
+  return (
+    <button
+      onClick={onOpenPreferences}
+      title={title}
+      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-gray-500 transition hover:bg-white/70 hover:text-gray-800 ${
+        compact ? "justify-center px-0" : "w-full"
+      }`}
+    >
+      <span className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+      {!compact && <span>{label}</span>}
+    </button>
+  );
+}
+
 function WorkspacePicker() {
   const setWorkspace = useApp((s) => s.setWorkspace);
   const error = useApp((s) => s.error);
@@ -118,10 +158,15 @@ function WorkspacePicker() {
     <div className="flex h-full items-center justify-center px-6">
       <div className="max-w-md rounded-2xl border border-white/70 bg-white/55 px-8 py-10 text-center shadow-glass-lg backdrop-blur-xl">
         <h1 className="mb-2 text-2xl font-semibold text-gray-900">欢迎使用 Dazi</h1>
-        <p className="mb-6 text-sm text-gray-600">
+        <p className="mb-3 text-sm text-gray-600">
           选择一个文件夹作为工作区，所有任务都会以子目录形式保存在其中。
           建议放在 iCloud Drive 中以便多设备同步。
         </p>
+        <ul className="mx-auto mb-6 max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-gray-500">
+          <li>· 任务即文件夹：每个任务就是工作区里的一个子目录，README、参考资料、产出都在里面。</li>
+          <li>· 每个任务只能看到自己目录里的文件，互不干扰。</li>
+          <li>· 数据全部存在本地，不上云。</li>
+        </ul>
         <button
           onClick={pick}
           className="rounded-lg bg-accent/90 px-4 py-2 text-sm font-medium text-on-accent shadow-md shadow-accent/20 transition hover:bg-accent"
@@ -136,8 +181,10 @@ function WorkspacePicker() {
 
 function NewTaskForm({ onCancel }: { onCancel: () => void }) {
   const createProject = useApp((s) => s.createProject);
+  const writeReadme = useApp((s) => s.writeReadme);
   const linkExistingFolder = useApp((s) => s.linkExistingFolder);
   const [name, setName] = useState("");
+  const [templateIdx, setTemplateIdx] = useState<number | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,7 +192,11 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
     const init: ProjectInit = {
       requires_references: true,
     };
-    await createProject(name.trim(), init);
+    const summary = await createProject(name.trim(), init);
+    // 选了场景模板：把结构化骨架写进 README，用户再改（避免笼统指令产口水稿）
+    if (summary && templateIdx !== null) {
+      await writeReadme(summary.path, TASK_TEMPLATES[templateIdx].content);
+    }
     onCancel();
   }
 
@@ -168,6 +219,30 @@ function NewTaskForm({ onCancel }: { onCancel: () => void }) {
         placeholder="任务名称"
         className="w-full rounded-md border border-white/70 bg-white/80 px-2 py-1.5 text-sm outline-none transition focus:border-accent-border focus:bg-white"
       />
+      <div>
+        <div className="mb-1 text-[10px] text-gray-400">
+          场景模板（可选，选中后预填 README 骨架）
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {TASK_TEMPLATES.map((t, i) => {
+            const active = templateIdx === i;
+            return (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => setTemplateIdx(active ? null : i)}
+                className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                  active
+                    ? "border-accent/70 bg-accent-soft text-accent-text"
+                    : "border-white/70 bg-white/70 text-gray-600 hover:bg-white"
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
@@ -269,6 +344,9 @@ function ProjectList({
           <ChevronsRight size={14} />
         </button>
         <ThemeToggle />
+        <div className="mt-auto">
+          <HealthDot onOpenPreferences={onOpenPreferences} compact />
+        </div>
       </aside>
     );
   }
@@ -468,6 +546,9 @@ function ProjectList({
         })}
         </>
         )}
+      </div>
+      <div className="border-t border-white/60 px-2 py-1.5">
+        <HealthDot onOpenPreferences={onOpenPreferences} />
       </div>
     </aside>
   );

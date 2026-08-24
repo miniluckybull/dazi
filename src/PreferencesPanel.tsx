@@ -168,6 +168,7 @@ function BackendTab() {
  *  通过的结果可作为 #14 后端切换的参考。 */
 function ModelProbeSection() {
   const testModelConfig = useApp((s) => s.testModelConfig);
+  const setProbeResult = useApp((s) => s.setProbeResult);
   const [provider, setProvider] = useState("anthropic");
   const [endpoint, setEndpoint] = useState("https://api.anthropic.com");
   const [model, setModel] = useState("claude-sonnet-4-5");
@@ -208,6 +209,7 @@ function ModelProbeSection() {
         api_key: apiKey,
       });
       setResult(r);
+      setProbeResult(r.success);
     } catch (e: any) {
       setResult({
         success: false,
@@ -218,6 +220,7 @@ function ModelProbeSection() {
         model_response: null,
         actual_model: null,
       });
+      setProbeResult(false);
     } finally {
       setTesting(false);
     }

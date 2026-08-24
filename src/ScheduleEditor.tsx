@@ -323,6 +323,9 @@ export function ScheduleConfigModal({
                   到点后会以「跳过权限」模式无人值守运行 Claude，它可在本项目目录内自主读写文件、执行命令。
                   破坏性操作会被要求只记录待你确认，运行留痕在 .dazi/journal.md。
                 </p>
+                <p className="text-amber-700/90">
+                  首次运行建议先点顶栏「先出计划」，确认 Claude 的方案靠谱后再开自动执行，质量更稳。
+                </p>
                 <label className="flex items-center gap-1.5">
                   <input
                     type="checkbox"

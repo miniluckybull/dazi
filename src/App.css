@@ -155,6 +155,16 @@ body {
   font-size: 13px;
   line-height: 1.4;
 }
+/* 空 README 的引导占位（MarkdownEditor 挂 crepe-empty 类）：仅当文档只剩一个
+   空段落（ProseMirror 空块内含唯一 <br>）时显示，输入首字符即消失 */
+.crepe-host.crepe-empty .milkdown .ProseMirror
+  > p:first-child:last-child:has(> br:only-child)::before {
+  content: "描述任务目标、产出格式和约束，越具体产出越稳";
+  color: rgb(var(--c-gray-500) / 0.7);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
 /* 标题：收敛层级反差，节奏贴近正文 */
 .crepe-host .milkdown .ProseMirror h1 {
   font-size: 19px;

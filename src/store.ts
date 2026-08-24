@@ -142,7 +142,7 @@ interface AppState {
   setShowSkills: (v: boolean) => void;
   refreshSkills: () => Promise<void>;
   selectSkill: (slug: string | null) => void;
-  createProject: (name: string, init?: ProjectInit) => Promise<void>;
+  createProject: (name: string, init?: ProjectInit) => Promise<ProjectSummary | null>;
   linkExistingFolder: (path: string) => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
   selectProject: (slug: string | null) => void;
@@ -159,6 +159,7 @@ interface AppState {
   revealReferences: (projectPath: string) => Promise<void>;
   openTerminal: (path: string) => Promise<void>;
   handOffToClaude: (projectPath: string) => Promise<ProjectMeta>;
+  planWithClaude: (projectPath: string) => Promise<ProjectMeta>;
   continueWithClaude: (projectPath: string) => Promise<void>;
   archiveProject: (projectPath: string) => Promise<void>;
   unarchiveProject: (projectPath: string) => Promise<void>;
@@ -186,6 +187,10 @@ interface AppState {
   backendList: BackendInfo[];
   loadBackend: () => Promise<void>;
   setBackend: (name: string) => Promise<void>;
+  /** 模型可用检测结果（最近一次），常驻健康点指示用；持久化 localStorage。 */
+  probeStatus: "unknown" | "ok" | "fail";
+  probeAt: number | null;
+  setProbeResult: (ok: boolean) => void;
   /** 模型可用检测（反馈 #15：整合 model-test） */
   testModelConfig: (config: ModelTestInput) => Promise<ModelTestResult>;
   /** 用量查询（反馈 #16） */
@@ -289,6 +294,15 @@ export const useApp = create<AppState>((set, get) => ({
   agentMode: localStorage.getItem("dazi_agent_mode") === "1",
   backend: "claude",
   backendList: [],
+  probeStatus: (localStorage.getItem("dazi_probe_status") as "ok" | "fail") ?? "unknown",
+  probeAt: Number(localStorage.getItem("dazi_probe_at")) || null,
+
+  setProbeResult: (ok) => {
+    const at = Date.now();
+    localStorage.setItem("dazi_probe_status", ok ? "ok" : "fail");
+    localStorage.setItem("dazi_probe_at", String(at));
+    set({ probeStatus: ok ? "ok" : "fail", probeAt: at });
+  },
 
   setAttention: (slug, v) =>
     set((st) => {
@@ -384,7 +398,7 @@ export const useApp = create<AppState>((set, get) => ({
     const { config } = get();
     if (!config?.workspace) {
       set({ error: "请先选择工作区" });
-      return;
+      return null;
     }
     try {
       const summary = await invoke<ProjectSummary>("create_project", {
@@ -394,8 +408,10 @@ export const useApp = create<AppState>((set, get) => ({
       });
       set({ error: null, selectedSlug: summary.slug });
       await get().refreshProjects();
+      return summary;
     } catch (e: any) {
       set({ error: String(e) });
+      return null;
     }
   },
 
@@ -471,6 +487,12 @@ export const useApp = create<AppState>((set, get) => ({
 
   handOffToClaude: async (projectPath) => {
     const meta = await invoke<ProjectMeta>("hand_off_to_claude", { projectPath });
+    await get().refreshProjects();
+    return meta;
+  },
+
+  planWithClaude: async (projectPath) => {
+    const meta = await invoke<ProjectMeta>("plan_with_claude", { projectPath });
     await get().refreshProjects();
     return meta;
   },

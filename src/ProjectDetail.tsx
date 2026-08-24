@@ -16,6 +16,7 @@ import {
   SquareTerminal,
   RefreshCw,
   ChevronsRight,
+  ClipboardList,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
 import { ScheduleConfigModal } from "./ScheduleEditor";
@@ -156,6 +157,7 @@ export function ProjectDetail({
   const importReferences = useApp((s) => s.importReferences);
   const revealInFinder = useApp((s) => s.revealInFinder);
   const handOffToClaude = useApp((s) => s.handOffToClaude);
+  const planWithClaude = useApp((s) => s.planWithClaude);
   const continueWithClaude = useApp((s) => s.continueWithClaude);
   const archiveProject = useApp((s) => s.archiveProject);
   const unarchiveProject = useApp((s) => s.unarchiveProject);
@@ -338,6 +340,25 @@ export function ProjectDetail({
       await runAutopilotNow(project.path);
     } finally {
       setAutopiloting(false);
+    }
+  }
+
+  // 「先出计划」：以 plan 模式启动协作——Claude 只读探索、产出执行计划，
+  // 不改动任何文件；用户在终端确认计划后再放行执行（复杂任务先看方案，质量更稳）。
+  async function callPlan() {
+    if (!project) return;
+    const ok = await ask(
+      `以计划模式启动协作？\nClaude 会只读分析 README 与参考资料，给出分步执行计划，不会改动任何文件；你确认计划后再让它执行。`,
+      { title: "先出计划", kind: "info" }
+    );
+    if (!ok) return;
+    const mode = await invoke<string>("get_terminal_mode").catch(() => "embedded");
+    if (mode === "external") {
+      await planWithClaude(project.path);
+    } else {
+      await requestLaunch(project.slug, project.path, "plan");
+      setTab("terminal");
+      await refreshProjects();
     }
   }
 
@@ -574,6 +595,12 @@ export function ProjectDetail({
                     />
                   </IconButton>
                 )}
+                <IconButton
+                  title="先出计划（plan 模式：Claude 只读分析、给出执行计划，确认后再执行，不改动文件）"
+                  onClick={callPlan}
+                >
+                  <ClipboardList size={15} />
+                </IconButton>
                 <IconButton
                   title="在 Finder 中显示"
                   onClick={() => revealInFinder(project.path)}

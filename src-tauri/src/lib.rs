@@ -513,6 +513,21 @@ fn hand_off_to_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<P
     project::mark_handed_off(&project_path)
 }
 
+/// 「先出计划」的外部终端路径（terminal: external 时）：plan 模式只产计划不执行。
+#[tauri::command]
+fn plan_with_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<ProjectMeta, String> {
+    if !project_path.exists() {
+        return Err(format!("项目不存在: {}", project_path.display()));
+    }
+    let cfg = config::load()?;
+    let kind = read_terminal_kind(&cfg.workspace);
+    let prompt = prompt::build_handoff_plan_prompt(&project_path);
+    let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
+    let cmd = escape_applescript(&backend.build_interactive_plan_cmd(&prompt));
+    run_in_terminal(&kind, &project_path, Some(&cmd))?;
+    project::mark_handed_off(&project_path)
+}
+
 #[tauri::command]
 fn continue_with_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<(), String> {
     if !project_path.exists() {
@@ -602,6 +617,7 @@ fn execute_autopilot(
                 summary: e.clone(),
                 session_id: None,
                 usage: None,
+                artifacts: Vec::new(),
             };
             let _ = autopilot::append_autopilot_journal(project_path, &outcome);
             (false, e, None)
@@ -763,6 +779,7 @@ pub fn run() {
             reveal_in_finder,
             open_terminal,
             hand_off_to_claude,
+            plan_with_claude,
             continue_with_claude,
             reveal_references,
             archive_project,

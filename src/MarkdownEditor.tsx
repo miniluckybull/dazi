@@ -102,6 +102,9 @@ export function MarkdownEditor({
   const hostRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  // 空 README 时给编辑器加引导占位（CSS ::before，见 App.css 的 .crepe-empty 规则）；
+  // 只在挂载时判定，用户一旦输入首字符，空段落选择器自然失效。
+  const startEmpty = !defaultValue.trim();
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -172,5 +175,10 @@ export function MarkdownEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={hostRef} className="crepe-host h-full overflow-y-auto" />;
+  return (
+    <div
+      ref={hostRef}
+      className={`crepe-host h-full overflow-y-auto${startEmpty ? " crepe-empty" : ""}`}
+    />
+  );
 }

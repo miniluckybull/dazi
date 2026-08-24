@@ -9,7 +9,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { useApp } from "../store";
 import "@xterm/xterm/css/xterm.css";
 
-export type PtyLaunch = "shell" | "handoff" | "continue";
+export type PtyLaunch = "shell" | "handoff" | "plan" | "continue";
 
 type PtyEvent =
   | { type: "output"; data: string }
