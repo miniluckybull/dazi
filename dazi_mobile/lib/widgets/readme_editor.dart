@@ -95,7 +95,9 @@ class _ReadmeEditorState extends State<ReadmeEditor> {
     return Stack(
       children: [
         Markdown(
-          data: _controller.text.isEmpty ? '（暂无内容）' : _controller.text,
+          data: _controller.text.isEmpty
+              ? '（暂无内容）\n\n描述越具体，产出越稳。点右下角按钮编辑。'
+              : _controller.text,
           padding: const EdgeInsets.all(16),
           selectable: true,
         ),

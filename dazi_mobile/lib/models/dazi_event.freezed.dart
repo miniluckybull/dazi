@@ -37,10 +37,15 @@ mixin _$DaziEvent {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String slug, String name) taskTriggered,
-    required TResult Function(String slug, String name, bool ok, String summary)
+    required TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)
         taskCompleted,
-    required TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)
+    required TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)
         approvalRequested,
     required TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)
@@ -50,10 +55,15 @@ mixin _$DaziEvent {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String slug, String name)? taskTriggered,
-    TResult? Function(String slug, String name, bool ok, String summary)?
+    TResult? Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult? Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult? Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult? Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -63,10 +73,15 @@ mixin _$DaziEvent {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String slug, String name)? taskTriggered,
-    TResult Function(String slug, String name, bool ok, String summary)?
+    TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -232,10 +247,15 @@ class _$TaskTriggeredImpl implements TaskTriggered {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String slug, String name) taskTriggered,
-    required TResult Function(String slug, String name, bool ok, String summary)
+    required TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)
         taskCompleted,
-    required TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)
+    required TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)
         approvalRequested,
     required TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)
@@ -248,10 +268,15 @@ class _$TaskTriggeredImpl implements TaskTriggered {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String slug, String name)? taskTriggered,
-    TResult? Function(String slug, String name, bool ok, String summary)?
+    TResult? Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult? Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult? Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult? Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -264,10 +289,15 @@ class _$TaskTriggeredImpl implements TaskTriggered {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String slug, String name)? taskTriggered,
-    TResult Function(String slug, String name, bool ok, String summary)?
+    TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -353,7 +383,13 @@ abstract class _$$TaskCompletedImplCopyWith<$Res>
       __$$TaskCompletedImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String slug, String name, bool ok, String summary});
+  $Res call(
+      {String slug,
+      String name,
+      bool ok,
+      String summary,
+      @JsonKey(name: 'run_id') String runId,
+      List<String> artifacts});
 }
 
 /// @nodoc
@@ -373,6 +409,8 @@ class __$$TaskCompletedImplCopyWithImpl<$Res>
     Object? name = null,
     Object? ok = null,
     Object? summary = null,
+    Object? runId = null,
+    Object? artifacts = null,
   }) {
     return _then(_$TaskCompletedImpl(
       slug: null == slug
@@ -391,6 +429,14 @@ class __$$TaskCompletedImplCopyWithImpl<$Res>
           ? _value.summary
           : summary // ignore: cast_nullable_to_non_nullable
               as String,
+      runId: null == runId
+          ? _value.runId
+          : runId // ignore: cast_nullable_to_non_nullable
+              as String,
+      artifacts: null == artifacts
+          ? _value._artifacts
+          : artifacts // ignore: cast_nullable_to_non_nullable
+              as List<String>,
     ));
   }
 }
@@ -403,8 +449,11 @@ class _$TaskCompletedImpl implements TaskCompleted {
       required this.name,
       required this.ok,
       required this.summary,
+      @JsonKey(name: 'run_id') this.runId = '',
+      final List<String> artifacts = const [],
       final String? $type})
-      : $type = $type ?? 'task-completed';
+      : _artifacts = artifacts,
+        $type = $type ?? 'task-completed';
 
   factory _$TaskCompletedImpl.fromJson(Map<String, dynamic> json) =>
       _$$TaskCompletedImplFromJson(json);
@@ -417,13 +466,25 @@ class _$TaskCompletedImpl implements TaskCompleted {
   final bool ok;
   @override
   final String summary;
+// 运行记录 id 与产物清单；旧 daemon 没有这两个字段，向后兼容默认空。
+  @override
+  @JsonKey(name: 'run_id')
+  final String runId;
+  final List<String> _artifacts;
+  @override
+  @JsonKey()
+  List<String> get artifacts {
+    if (_artifacts is EqualUnmodifiableListView) return _artifacts;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_artifacts);
+  }
 
   @JsonKey(name: 'type')
   final String $type;
 
   @override
   String toString() {
-    return 'DaziEvent.taskCompleted(slug: $slug, name: $name, ok: $ok, summary: $summary)';
+    return 'DaziEvent.taskCompleted(slug: $slug, name: $name, ok: $ok, summary: $summary, runId: $runId, artifacts: $artifacts)';
   }
 
   @override
@@ -434,12 +495,16 @@ class _$TaskCompletedImpl implements TaskCompleted {
             (identical(other.slug, slug) || other.slug == slug) &&
             (identical(other.name, name) || other.name == name) &&
             (identical(other.ok, ok) || other.ok == ok) &&
-            (identical(other.summary, summary) || other.summary == summary));
+            (identical(other.summary, summary) || other.summary == summary) &&
+            (identical(other.runId, runId) || other.runId == runId) &&
+            const DeepCollectionEquality()
+                .equals(other._artifacts, _artifacts));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, slug, name, ok, summary);
+  int get hashCode => Object.hash(runtimeType, slug, name, ok, summary, runId,
+      const DeepCollectionEquality().hash(_artifacts));
 
   /// Create a copy of DaziEvent
   /// with the given fields replaced by the non-null parameter values.
@@ -453,42 +518,57 @@ class _$TaskCompletedImpl implements TaskCompleted {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String slug, String name) taskTriggered,
-    required TResult Function(String slug, String name, bool ok, String summary)
+    required TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)
         taskCompleted,
-    required TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)
+    required TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)
         approvalRequested,
     required TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
-    return taskCompleted(slug, name, ok, summary);
+    return taskCompleted(slug, name, ok, summary, runId, artifacts);
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String slug, String name)? taskTriggered,
-    TResult? Function(String slug, String name, bool ok, String summary)?
+    TResult? Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult? Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult? Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult? Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
-    return taskCompleted?.call(slug, name, ok, summary);
+    return taskCompleted?.call(slug, name, ok, summary, runId, artifacts);
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String slug, String name)? taskTriggered,
-    TResult Function(String slug, String name, bool ok, String summary)?
+    TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -496,7 +576,7 @@ class _$TaskCompletedImpl implements TaskCompleted {
     required TResult orElse(),
   }) {
     if (taskCompleted != null) {
-      return taskCompleted(slug, name, ok, summary);
+      return taskCompleted(slug, name, ok, summary, runId, artifacts);
     }
     return orElse();
   }
@@ -551,7 +631,9 @@ abstract class TaskCompleted implements DaziEvent {
       {required final String slug,
       required final String name,
       required final bool ok,
-      required final String summary}) = _$TaskCompletedImpl;
+      required final String summary,
+      @JsonKey(name: 'run_id') final String runId,
+      final List<String> artifacts}) = _$TaskCompletedImpl;
 
   factory TaskCompleted.fromJson(Map<String, dynamic> json) =
       _$TaskCompletedImpl.fromJson;
@@ -560,7 +642,10 @@ abstract class TaskCompleted implements DaziEvent {
   String get slug;
   String get name;
   bool get ok;
-  String get summary;
+  String get summary; // 运行记录 id 与产物清单；旧 daemon 没有这两个字段，向后兼容默认空。
+  @JsonKey(name: 'run_id')
+  String get runId;
+  List<String> get artifacts;
 
   /// Create a copy of DaziEvent
   /// with the given fields replaced by the non-null parameter values.
@@ -582,7 +667,10 @@ abstract class _$$ApprovalRequestedImplCopyWith<$Res>
       {String slug,
       String name,
       @JsonKey(name: 'approval_id') String approvalId,
-      String plan});
+      String plan,
+      UsageEstimate? estimate});
+
+  $UsageEstimateCopyWith<$Res>? get estimate;
 }
 
 /// @nodoc
@@ -602,6 +690,7 @@ class __$$ApprovalRequestedImplCopyWithImpl<$Res>
     Object? name = null,
     Object? approvalId = null,
     Object? plan = null,
+    Object? estimate = freezed,
   }) {
     return _then(_$ApprovalRequestedImpl(
       slug: null == slug
@@ -620,7 +709,25 @@ class __$$ApprovalRequestedImplCopyWithImpl<$Res>
           ? _value.plan
           : plan // ignore: cast_nullable_to_non_nullable
               as String,
+      estimate: freezed == estimate
+          ? _value.estimate
+          : estimate // ignore: cast_nullable_to_non_nullable
+              as UsageEstimate?,
     ));
+  }
+
+  /// Create a copy of DaziEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $UsageEstimateCopyWith<$Res>? get estimate {
+    if (_value.estimate == null) {
+      return null;
+    }
+
+    return $UsageEstimateCopyWith<$Res>(_value.estimate!, (value) {
+      return _then(_value.copyWith(estimate: value));
+    });
   }
 }
 
@@ -632,6 +739,7 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
       required this.name,
       @JsonKey(name: 'approval_id') required this.approvalId,
       required this.plan,
+      this.estimate,
       final String? $type})
       : $type = $type ?? 'approval-requested';
 
@@ -647,13 +755,16 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
   final String approvalId;
   @override
   final String plan;
+// 用量/费用预估；无历史时为 null。
+  @override
+  final UsageEstimate? estimate;
 
   @JsonKey(name: 'type')
   final String $type;
 
   @override
   String toString() {
-    return 'DaziEvent.approvalRequested(slug: $slug, name: $name, approvalId: $approvalId, plan: $plan)';
+    return 'DaziEvent.approvalRequested(slug: $slug, name: $name, approvalId: $approvalId, plan: $plan, estimate: $estimate)';
   }
 
   @override
@@ -665,12 +776,15 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.approvalId, approvalId) ||
                 other.approvalId == approvalId) &&
-            (identical(other.plan, plan) || other.plan == plan));
+            (identical(other.plan, plan) || other.plan == plan) &&
+            (identical(other.estimate, estimate) ||
+                other.estimate == estimate));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, slug, name, approvalId, plan);
+  int get hashCode =>
+      Object.hash(runtimeType, slug, name, approvalId, plan, estimate);
 
   /// Create a copy of DaziEvent
   /// with the given fields replaced by the non-null parameter values.
@@ -685,42 +799,57 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String slug, String name) taskTriggered,
-    required TResult Function(String slug, String name, bool ok, String summary)
+    required TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)
         taskCompleted,
-    required TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)
+    required TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)
         approvalRequested,
     required TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
-    return approvalRequested(slug, name, approvalId, plan);
+    return approvalRequested(slug, name, approvalId, plan, estimate);
   }
 
   @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String slug, String name)? taskTriggered,
-    TResult? Function(String slug, String name, bool ok, String summary)?
+    TResult? Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult? Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult? Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult? Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
-    return approvalRequested?.call(slug, name, approvalId, plan);
+    return approvalRequested?.call(slug, name, approvalId, plan, estimate);
   }
 
   @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String slug, String name)? taskTriggered,
-    TResult Function(String slug, String name, bool ok, String summary)?
+    TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -728,7 +857,7 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
     required TResult orElse(),
   }) {
     if (approvalRequested != null) {
-      return approvalRequested(slug, name, approvalId, plan);
+      return approvalRequested(slug, name, approvalId, plan, estimate);
     }
     return orElse();
   }
@@ -783,7 +912,8 @@ abstract class ApprovalRequested implements DaziEvent {
       {required final String slug,
       required final String name,
       @JsonKey(name: 'approval_id') required final String approvalId,
-      required final String plan}) = _$ApprovalRequestedImpl;
+      required final String plan,
+      final UsageEstimate? estimate}) = _$ApprovalRequestedImpl;
 
   factory ApprovalRequested.fromJson(Map<String, dynamic> json) =
       _$ApprovalRequestedImpl.fromJson;
@@ -793,7 +923,8 @@ abstract class ApprovalRequested implements DaziEvent {
   String get name;
   @JsonKey(name: 'approval_id')
   String get approvalId;
-  String get plan;
+  String get plan; // 用量/费用预估；无历史时为 null。
+  UsageEstimate? get estimate;
 
   /// Create a copy of DaziEvent
   /// with the given fields replaced by the non-null parameter values.
@@ -909,10 +1040,15 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String slug, String name) taskTriggered,
-    required TResult Function(String slug, String name, bool ok, String summary)
+    required TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)
         taskCompleted,
-    required TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)
+    required TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)
         approvalRequested,
     required TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)
@@ -925,10 +1061,15 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String slug, String name)? taskTriggered,
-    TResult? Function(String slug, String name, bool ok, String summary)?
+    TResult? Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult? Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult? Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult? Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?
@@ -941,10 +1082,15 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String slug, String name)? taskTriggered,
-    TResult Function(String slug, String name, bool ok, String summary)?
+    TResult Function(String slug, String name, bool ok, String summary,
+            @JsonKey(name: 'run_id') String runId, List<String> artifacts)?
         taskCompleted,
-    TResult Function(String slug, String name,
-            @JsonKey(name: 'approval_id') String approvalId, String plan)?
+    TResult Function(
+            String slug,
+            String name,
+            @JsonKey(name: 'approval_id') String approvalId,
+            String plan,
+            UsageEstimate? estimate)?
         approvalRequested,
     TResult Function(String slug,
             @JsonKey(name: 'approval_id') String approvalId, bool approved)?

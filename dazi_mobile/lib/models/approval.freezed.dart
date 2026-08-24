@@ -27,7 +27,9 @@ mixin _$Approval {
       throw _privateConstructorUsedError; // 服务端 ApprovalStatus：pending / approved / rejected。
   String get status => throw _privateConstructorUsedError;
   @JsonKey(name: 'created_at')
-  String? get createdAt => throw _privateConstructorUsedError;
+  String? get createdAt =>
+      throw _privateConstructorUsedError; // 基于历史 usage 的用量/费用预估；无历史时为 null。
+  UsageEstimate? get estimate => throw _privateConstructorUsedError;
 
   /// Serializes this Approval to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -50,7 +52,10 @@ abstract class $ApprovalCopyWith<$Res> {
       String name,
       String plan,
       String status,
-      @JsonKey(name: 'created_at') String? createdAt});
+      @JsonKey(name: 'created_at') String? createdAt,
+      UsageEstimate? estimate});
+
+  $UsageEstimateCopyWith<$Res>? get estimate;
 }
 
 /// @nodoc
@@ -74,6 +79,7 @@ class _$ApprovalCopyWithImpl<$Res, $Val extends Approval>
     Object? plan = null,
     Object? status = null,
     Object? createdAt = freezed,
+    Object? estimate = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -100,7 +106,25 @@ class _$ApprovalCopyWithImpl<$Res, $Val extends Approval>
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
               as String?,
+      estimate: freezed == estimate
+          ? _value.estimate
+          : estimate // ignore: cast_nullable_to_non_nullable
+              as UsageEstimate?,
     ) as $Val);
+  }
+
+  /// Create a copy of Approval
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $UsageEstimateCopyWith<$Res>? get estimate {
+    if (_value.estimate == null) {
+      return null;
+    }
+
+    return $UsageEstimateCopyWith<$Res>(_value.estimate!, (value) {
+      return _then(_value.copyWith(estimate: value) as $Val);
+    });
   }
 }
 
@@ -118,7 +142,11 @@ abstract class _$$ApprovalImplCopyWith<$Res>
       String name,
       String plan,
       String status,
-      @JsonKey(name: 'created_at') String? createdAt});
+      @JsonKey(name: 'created_at') String? createdAt,
+      UsageEstimate? estimate});
+
+  @override
+  $UsageEstimateCopyWith<$Res>? get estimate;
 }
 
 /// @nodoc
@@ -140,6 +168,7 @@ class __$$ApprovalImplCopyWithImpl<$Res>
     Object? plan = null,
     Object? status = null,
     Object? createdAt = freezed,
+    Object? estimate = freezed,
   }) {
     return _then(_$ApprovalImpl(
       id: null == id
@@ -166,6 +195,10 @@ class __$$ApprovalImplCopyWithImpl<$Res>
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
               as String?,
+      estimate: freezed == estimate
+          ? _value.estimate
+          : estimate // ignore: cast_nullable_to_non_nullable
+              as UsageEstimate?,
     ));
   }
 }
@@ -179,7 +212,8 @@ class _$ApprovalImpl implements _Approval {
       required this.name,
       required this.plan,
       required this.status,
-      @JsonKey(name: 'created_at') this.createdAt});
+      @JsonKey(name: 'created_at') this.createdAt,
+      this.estimate});
 
   factory _$ApprovalImpl.fromJson(Map<String, dynamic> json) =>
       _$$ApprovalImplFromJson(json);
@@ -198,10 +232,13 @@ class _$ApprovalImpl implements _Approval {
   @override
   @JsonKey(name: 'created_at')
   final String? createdAt;
+// 基于历史 usage 的用量/费用预估；无历史时为 null。
+  @override
+  final UsageEstimate? estimate;
 
   @override
   String toString() {
-    return 'Approval(id: $id, slug: $slug, name: $name, plan: $plan, status: $status, createdAt: $createdAt)';
+    return 'Approval(id: $id, slug: $slug, name: $name, plan: $plan, status: $status, createdAt: $createdAt, estimate: $estimate)';
   }
 
   @override
@@ -215,13 +252,15 @@ class _$ApprovalImpl implements _Approval {
             (identical(other.plan, plan) || other.plan == plan) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.createdAt, createdAt) ||
-                other.createdAt == createdAt));
+                other.createdAt == createdAt) &&
+            (identical(other.estimate, estimate) ||
+                other.estimate == estimate));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, id, slug, name, plan, status, createdAt);
+  int get hashCode => Object.hash(
+      runtimeType, id, slug, name, plan, status, createdAt, estimate);
 
   /// Create a copy of Approval
   /// with the given fields replaced by the non-null parameter values.
@@ -246,7 +285,8 @@ abstract class _Approval implements Approval {
       required final String name,
       required final String plan,
       required final String status,
-      @JsonKey(name: 'created_at') final String? createdAt}) = _$ApprovalImpl;
+      @JsonKey(name: 'created_at') final String? createdAt,
+      final UsageEstimate? estimate}) = _$ApprovalImpl;
 
   factory _Approval.fromJson(Map<String, dynamic> json) =
       _$ApprovalImpl.fromJson;
@@ -263,7 +303,9 @@ abstract class _Approval implements Approval {
   String get status;
   @override
   @JsonKey(name: 'created_at')
-  String? get createdAt;
+  String? get createdAt; // 基于历史 usage 的用量/费用预估；无历史时为 null。
+  @override
+  UsageEstimate? get estimate;
 
   /// Create a copy of Approval
   /// with the given fields replaced by the non-null parameter values.

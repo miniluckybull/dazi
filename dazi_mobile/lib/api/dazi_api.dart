@@ -36,6 +36,40 @@ class DaziApi {
     return list.map((e) => ProjectSummary.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// 新建任务：POST /projects {name}，返回建好的 ProjectSummary（含 slug）。
+  Future<ProjectSummary> createProject(String name) async {
+    final response = await _dio.post(ApiPaths.projects, data: {'name': name});
+    return ProjectSummary.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 以 plan 模式产出执行计划并登记待批，返回 Approval（含 plan 文本与 estimate）。
+  /// claude 调用耗时长，单独放宽接收超时。
+  Future<Approval> createPlan(String slug) async {
+    final response = await _dio.post(
+      ApiPaths.planPath(slug),
+      options: Options(receiveTimeout: const Duration(minutes: 10)),
+    );
+    return Approval.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 跨项目最近运行历史（服务端上限 100 条）。
+  Future<List<RunEntry>> getRuns() async {
+    final response = await _dio.get(ApiPaths.runs);
+    final list = response.data as List<dynamic>;
+    return list.map((e) => RunEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// 探活：返回 claude 可用性；网络错误由调用方按未知处理。
+  Future<HealthInfo> getHealth() async {
+    final response = await _dio.get(ApiPaths.health);
+    final data = response.data as Map<String, dynamic>;
+    final claude = data['claude'] as Map<String, dynamic>?;
+    return HealthInfo(
+      claudeOk: claude?['ok'] as bool?,
+      claudeError: claude?['error'] as String?,
+    );
+  }
+
   Future<ProjectMeta> getProjectMeta(String slug) async {
     final response = await _dio.get(ApiPaths.projectPath(slug));
     return ProjectMeta.fromJson(response.data as Map<String, dynamic>);

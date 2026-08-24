@@ -3,7 +3,7 @@
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
-part of 'run_record.dart';
+part of 'run_entry.dart';
 
 // **************************************************************************
 // FreezedGenerator
@@ -14,38 +14,41 @@ T _$identity<T>(T value) => value;
 final _privateConstructorUsedError = UnsupportedError(
     'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
-RunRecord _$RunRecordFromJson(Map<String, dynamic> json) {
-  return _RunRecord.fromJson(json);
+RunEntry _$RunEntryFromJson(Map<String, dynamic> json) {
+  return _RunEntry.fromJson(json);
 }
 
 /// @nodoc
-mixin _$RunRecord {
+mixin _$RunEntry {
+  String get slug => throw _privateConstructorUsedError;
+  String get name => throw _privateConstructorUsedError;
   String get at => throw _privateConstructorUsedError;
   String get action => throw _privateConstructorUsedError;
   bool get ok => throw _privateConstructorUsedError;
-  String? get message =>
-      throw _privateConstructorUsedError; // 运行 id、结尾摘要、产物清单均为后端新增字段；老记录没有，向后兼容。
+  String? get message => throw _privateConstructorUsedError;
   String? get id => throw _privateConstructorUsedError;
   String? get summary => throw _privateConstructorUsedError;
   List<String> get artifacts => throw _privateConstructorUsedError;
 
-  /// Serializes this RunRecord to a JSON map.
+  /// Serializes this RunEntry to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
-  /// Create a copy of RunRecord
+  /// Create a copy of RunEntry
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  $RunRecordCopyWith<RunRecord> get copyWith =>
+  $RunEntryCopyWith<RunEntry> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract class $RunRecordCopyWith<$Res> {
-  factory $RunRecordCopyWith(RunRecord value, $Res Function(RunRecord) then) =
-      _$RunRecordCopyWithImpl<$Res, RunRecord>;
+abstract class $RunEntryCopyWith<$Res> {
+  factory $RunEntryCopyWith(RunEntry value, $Res Function(RunEntry) then) =
+      _$RunEntryCopyWithImpl<$Res, RunEntry>;
   @useResult
   $Res call(
-      {String at,
+      {String slug,
+      String name,
+      String at,
       String action,
       bool ok,
       String? message,
@@ -55,20 +58,22 @@ abstract class $RunRecordCopyWith<$Res> {
 }
 
 /// @nodoc
-class _$RunRecordCopyWithImpl<$Res, $Val extends RunRecord>
-    implements $RunRecordCopyWith<$Res> {
-  _$RunRecordCopyWithImpl(this._value, this._then);
+class _$RunEntryCopyWithImpl<$Res, $Val extends RunEntry>
+    implements $RunEntryCopyWith<$Res> {
+  _$RunEntryCopyWithImpl(this._value, this._then);
 
   // ignore: unused_field
   final $Val _value;
   // ignore: unused_field
   final $Res Function($Val) _then;
 
-  /// Create a copy of RunRecord
+  /// Create a copy of RunEntry
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
+    Object? slug = null,
+    Object? name = null,
     Object? at = null,
     Object? action = null,
     Object? ok = null,
@@ -78,6 +83,14 @@ class _$RunRecordCopyWithImpl<$Res, $Val extends RunRecord>
     Object? artifacts = null,
   }) {
     return _then(_value.copyWith(
+      slug: null == slug
+          ? _value.slug
+          : slug // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
       at: null == at
           ? _value.at
           : at // ignore: cast_nullable_to_non_nullable
@@ -111,15 +124,17 @@ class _$RunRecordCopyWithImpl<$Res, $Val extends RunRecord>
 }
 
 /// @nodoc
-abstract class _$$RunRecordImplCopyWith<$Res>
-    implements $RunRecordCopyWith<$Res> {
-  factory _$$RunRecordImplCopyWith(
-          _$RunRecordImpl value, $Res Function(_$RunRecordImpl) then) =
-      __$$RunRecordImplCopyWithImpl<$Res>;
+abstract class _$$RunEntryImplCopyWith<$Res>
+    implements $RunEntryCopyWith<$Res> {
+  factory _$$RunEntryImplCopyWith(
+          _$RunEntryImpl value, $Res Function(_$RunEntryImpl) then) =
+      __$$RunEntryImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
-      {String at,
+      {String slug,
+      String name,
+      String at,
       String action,
       bool ok,
       String? message,
@@ -129,18 +144,20 @@ abstract class _$$RunRecordImplCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$RunRecordImplCopyWithImpl<$Res>
-    extends _$RunRecordCopyWithImpl<$Res, _$RunRecordImpl>
-    implements _$$RunRecordImplCopyWith<$Res> {
-  __$$RunRecordImplCopyWithImpl(
-      _$RunRecordImpl _value, $Res Function(_$RunRecordImpl) _then)
+class __$$RunEntryImplCopyWithImpl<$Res>
+    extends _$RunEntryCopyWithImpl<$Res, _$RunEntryImpl>
+    implements _$$RunEntryImplCopyWith<$Res> {
+  __$$RunEntryImplCopyWithImpl(
+      _$RunEntryImpl _value, $Res Function(_$RunEntryImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of RunRecord
+  /// Create a copy of RunEntry
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
   $Res call({
+    Object? slug = null,
+    Object? name = null,
     Object? at = null,
     Object? action = null,
     Object? ok = null,
@@ -149,7 +166,15 @@ class __$$RunRecordImplCopyWithImpl<$Res>
     Object? summary = freezed,
     Object? artifacts = null,
   }) {
-    return _then(_$RunRecordImpl(
+    return _then(_$RunEntryImpl(
+      slug: null == slug
+          ? _value.slug
+          : slug // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
       at: null == at
           ? _value.at
           : at // ignore: cast_nullable_to_non_nullable
@@ -184,9 +209,11 @@ class __$$RunRecordImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$RunRecordImpl implements _RunRecord {
-  const _$RunRecordImpl(
-      {required this.at,
+class _$RunEntryImpl implements _RunEntry {
+  const _$RunEntryImpl(
+      {required this.slug,
+      required this.name,
+      required this.at,
       required this.action,
       required this.ok,
       this.message,
@@ -195,9 +222,13 @@ class _$RunRecordImpl implements _RunRecord {
       final List<String> artifacts = const []})
       : _artifacts = artifacts;
 
-  factory _$RunRecordImpl.fromJson(Map<String, dynamic> json) =>
-      _$$RunRecordImplFromJson(json);
+  factory _$RunEntryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$RunEntryImplFromJson(json);
 
+  @override
+  final String slug;
+  @override
+  final String name;
   @override
   final String at;
   @override
@@ -206,7 +237,6 @@ class _$RunRecordImpl implements _RunRecord {
   final bool ok;
   @override
   final String? message;
-// 运行 id、结尾摘要、产物清单均为后端新增字段；老记录没有，向后兼容。
   @override
   final String? id;
   @override
@@ -222,14 +252,16 @@ class _$RunRecordImpl implements _RunRecord {
 
   @override
   String toString() {
-    return 'RunRecord(at: $at, action: $action, ok: $ok, message: $message, id: $id, summary: $summary, artifacts: $artifacts)';
+    return 'RunEntry(slug: $slug, name: $name, at: $at, action: $action, ok: $ok, message: $message, id: $id, summary: $summary, artifacts: $artifacts)';
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$RunRecordImpl &&
+            other is _$RunEntryImpl &&
+            (identical(other.slug, slug) || other.slug == slug) &&
+            (identical(other.name, name) || other.name == name) &&
             (identical(other.at, at) || other.at == at) &&
             (identical(other.action, action) || other.action == action) &&
             (identical(other.ok, ok) || other.ok == ok) &&
@@ -242,38 +274,44 @@ class _$RunRecordImpl implements _RunRecord {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, at, action, ok, message, id,
-      summary, const DeepCollectionEquality().hash(_artifacts));
+  int get hashCode => Object.hash(runtimeType, slug, name, at, action, ok,
+      message, id, summary, const DeepCollectionEquality().hash(_artifacts));
 
-  /// Create a copy of RunRecord
+  /// Create a copy of RunEntry
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
-  _$$RunRecordImplCopyWith<_$RunRecordImpl> get copyWith =>
-      __$$RunRecordImplCopyWithImpl<_$RunRecordImpl>(this, _$identity);
+  _$$RunEntryImplCopyWith<_$RunEntryImpl> get copyWith =>
+      __$$RunEntryImplCopyWithImpl<_$RunEntryImpl>(this, _$identity);
 
   @override
   Map<String, dynamic> toJson() {
-    return _$$RunRecordImplToJson(
+    return _$$RunEntryImplToJson(
       this,
     );
   }
 }
 
-abstract class _RunRecord implements RunRecord {
-  const factory _RunRecord(
-      {required final String at,
+abstract class _RunEntry implements RunEntry {
+  const factory _RunEntry(
+      {required final String slug,
+      required final String name,
+      required final String at,
       required final String action,
       required final bool ok,
       final String? message,
       final String? id,
       final String? summary,
-      final List<String> artifacts}) = _$RunRecordImpl;
+      final List<String> artifacts}) = _$RunEntryImpl;
 
-  factory _RunRecord.fromJson(Map<String, dynamic> json) =
-      _$RunRecordImpl.fromJson;
+  factory _RunEntry.fromJson(Map<String, dynamic> json) =
+      _$RunEntryImpl.fromJson;
 
+  @override
+  String get slug;
+  @override
+  String get name;
   @override
   String get at;
   @override
@@ -281,7 +319,7 @@ abstract class _RunRecord implements RunRecord {
   @override
   bool get ok;
   @override
-  String? get message; // 运行 id、结尾摘要、产物清单均为后端新增字段；老记录没有，向后兼容。
+  String? get message;
   @override
   String? get id;
   @override
@@ -289,10 +327,10 @@ abstract class _RunRecord implements RunRecord {
   @override
   List<String> get artifacts;
 
-  /// Create a copy of RunRecord
+  /// Create a copy of RunEntry
   /// with the given fields replaced by the non-null parameter values.
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$RunRecordImplCopyWith<_$RunRecordImpl> get copyWith =>
+  _$$RunEntryImplCopyWith<_$RunEntryImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

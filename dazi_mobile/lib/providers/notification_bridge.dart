@@ -9,11 +9,11 @@ final notificationBridgeProvider = Provider<void>((ref) {
   ref.listen(eventsProvider, (_, next) {
     next.whenData((event) {
       event.whenOrNull(
-        approvalRequested: (slug, name, approvalId, plan) {
+        approvalRequested: (slug, name, approvalId, plan, estimate) {
           notifications.showApprovalRequested(slug, name, approvalId, plan);
         },
-        taskCompleted: (slug, name, ok, summary) {
-          notifications.showTaskCompleted(slug, name, ok, summary);
+        taskCompleted: (slug, name, ok, summary, runId, artifacts) {
+          notifications.showTaskCompleted(slug, name, ok, summary, runId);
         },
       );
     });

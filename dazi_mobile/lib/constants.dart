@@ -12,6 +12,7 @@ class StorageKeys {
 class ApiPaths {
   ApiPaths._();
   static const pair = '/api/v1/pair';
+  static const health = '/health';
   static const config = '/api/v1/config';
   static const projects = '/api/v1/projects';
   static const project = '/api/v1/projects/{slug}';

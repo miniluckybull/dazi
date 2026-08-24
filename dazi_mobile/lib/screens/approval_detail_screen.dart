@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../models/approval.dart';
+import '../models/usage_estimate.dart';
 import '../providers/approvals_provider.dart';
 
 /// 按 slug + id 从待批列表里查审批，供通知点击的 go_router 路由使用。
@@ -61,6 +62,10 @@ class ApprovalDetailScreen extends ConsumerWidget {
           children: [
             Text('项目: ${approval.slug}', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
+            if (approval.estimate != null) ...[
+              _EstimateCard(estimate: approval.estimate!),
+              const SizedBox(height: 12),
+            ],
             Expanded(
               child: Card(
                 child: Padding(
@@ -96,5 +101,58 @@ class ApprovalDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// 用量预估卡片：平均费用、平均 tokens、样本范围。estimate 为 null 时不渲染（由调用方判断）。
+class _EstimateCard extends StatelessWidget {
+  const _EstimateCard({required this.estimate});
+
+  final UsageEstimate estimate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scopeText = estimate.scope == 'project'
+        ? '基于本项目 ${estimate.sampleSize} 次历史'
+        : '基于全局历史（${estimate.sampleSize} 次）';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined,
+                    size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Text('用量预估', style: theme.textTheme.labelLarge),
+                const Spacer(),
+                Text(
+                  scopeText,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '平均费用: \$${estimate.avgCostUsd.toStringAsFixed(3)}  ·  '
+              '输入 ${_formatTokens(estimate.avgInputTokens)} / 输出 ${_formatTokens(estimate.avgOutputTokens)} tokens',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatTokens(double tokens) {
+    if (tokens >= 1000) {
+      return '${(tokens / 1000).toStringAsFixed(1)}k';
+    }
+    return tokens.toStringAsFixed(0);
   }
 }

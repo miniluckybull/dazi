@@ -56,7 +56,7 @@ final approvalsProvider = StateNotifierProvider<ApprovalsNotifier, AsyncValue<Li
   ref.listen(eventsProvider, (_, next) {
     next.whenData((event) {
       event.whenOrNull(
-        approvalRequested: (_, __, ___, ____) => notifier.refresh(),
+        approvalRequested: (_, __, ___, ____, _____) => notifier.refresh(),
         approvalResolved: (_, id, ____) => notifier.removeApproval(id),
       );
     });

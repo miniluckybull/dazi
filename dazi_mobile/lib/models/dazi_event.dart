@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'usage_estimate.dart';
+
 part 'dazi_event.freezed.dart';
 part 'dazi_event.g.dart';
 
@@ -15,6 +17,9 @@ class DaziEvent with _$DaziEvent {
     required String name,
     required bool ok,
     required String summary,
+    // 运行记录 id 与产物清单；旧 daemon 没有这两个字段，向后兼容默认空。
+    @JsonKey(name: 'run_id') @Default('') String runId,
+    @Default([]) List<String> artifacts,
   }) = TaskCompleted;
 
   const factory DaziEvent.approvalRequested({
@@ -22,6 +27,8 @@ class DaziEvent with _$DaziEvent {
     required String name,
     @JsonKey(name: 'approval_id') required String approvalId,
     required String plan,
+    // 用量/费用预估；无历史时为 null。
+    UsageEstimate? estimate,
   }) = ApprovalRequested;
 
   const factory DaziEvent.approvalResolved({

@@ -26,6 +26,11 @@ _$TaskCompletedImpl _$$TaskCompletedImplFromJson(Map<String, dynamic> json) =>
       name: json['name'] as String,
       ok: json['ok'] as bool,
       summary: json['summary'] as String,
+      runId: json['run_id'] as String? ?? '',
+      artifacts: (json['artifacts'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       $type: json['type'] as String?,
     );
 
@@ -35,6 +40,8 @@ Map<String, dynamic> _$$TaskCompletedImplToJson(_$TaskCompletedImpl instance) =>
       'name': instance.name,
       'ok': instance.ok,
       'summary': instance.summary,
+      'run_id': instance.runId,
+      'artifacts': instance.artifacts,
       'type': instance.$type,
     };
 
@@ -45,6 +52,9 @@ _$ApprovalRequestedImpl _$$ApprovalRequestedImplFromJson(
       name: json['name'] as String,
       approvalId: json['approval_id'] as String,
       plan: json['plan'] as String,
+      estimate: json['estimate'] == null
+          ? null
+          : UsageEstimate.fromJson(json['estimate'] as Map<String, dynamic>),
       $type: json['type'] as String?,
     );
 
@@ -55,6 +65,7 @@ Map<String, dynamic> _$$ApprovalRequestedImplToJson(
       'name': instance.name,
       'approval_id': instance.approvalId,
       'plan': instance.plan,
+      'estimate': instance.estimate,
       'type': instance.$type,
     };
 

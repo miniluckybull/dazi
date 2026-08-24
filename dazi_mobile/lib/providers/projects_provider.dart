@@ -58,7 +58,7 @@ final projectsProvider = StateNotifierProvider<ProjectsNotifier, AsyncValue<List
   ref.listen(eventsProvider, (_, next) {
     next.whenData((event) {
       event.whenOrNull(
-        taskCompleted: (slug, name, ok, summary) async {
+        taskCompleted: (slug, name, ok, summary, runId, artifacts) async {
           try {
             final meta = await api.getProjectMeta(slug);
             notifier.updateProject(

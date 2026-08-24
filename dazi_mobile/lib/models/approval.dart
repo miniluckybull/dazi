@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'usage_estimate.dart';
+
 part 'approval.freezed.dart';
 part 'approval.g.dart';
 
@@ -13,6 +15,8 @@ class Approval with _$Approval {
     // 服务端 ApprovalStatus：pending / approved / rejected。
     required String status,
     @JsonKey(name: 'created_at') String? createdAt,
+    // 基于历史 usage 的用量/费用预估；无历史时为 null。
+    UsageEstimate? estimate,
   }) = _Approval;
 
   factory Approval.fromJson(Map<String, dynamic> json) =>

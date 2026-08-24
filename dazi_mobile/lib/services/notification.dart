@@ -82,7 +82,9 @@ class NotificationService {
       return;
     }
     if (slug != null) {
-      router.push('/projects/${Uri.encodeComponent(slug)}');
+      // 任务完成类通知直达项目详情的运行 Tab。
+      final tab = payload['type'] == 'task' ? '?tab=runs' : '';
+      router.push('/projects/${Uri.encodeComponent(slug)}$tab');
     }
   }
 
@@ -103,7 +105,7 @@ class NotificationService {
     );
   }
 
-  void showTaskCompleted(String slug, String name, bool ok, String summary) {
+  void showTaskCompleted(String slug, String name, bool ok, String summary, String runId) {
     AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: _hashId('$slug-completed'),
@@ -111,7 +113,7 @@ class NotificationService {
         title: 'Dazi: $name',
         body: '${ok ? '✓' : '✗'} $summary',
         notificationLayout: NotificationLayout.Default,
-        payload: {'type': 'task', 'slug': slug},
+        payload: {'type': 'task', 'slug': slug, 'run_id': runId},
       ),
     );
   }

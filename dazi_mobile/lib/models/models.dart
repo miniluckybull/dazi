@@ -1,7 +1,10 @@
 export 'approval.dart';
 export 'dazi_event.dart';
+export 'health.dart';
 export 'pairing_result.dart';
 export 'project_meta.dart';
 export 'project_summary.dart';
+export 'run_entry.dart';
 export 'run_record.dart';
 export 'schedule.dart';
+export 'usage_estimate.dart';
