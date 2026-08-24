@@ -97,6 +97,15 @@ pub struct RunRecord {
     pub ok: bool,
     #[serde(default)]
     pub message: Option<String>,
+    /// 运行 id（与 TaskCompleted 事件 run_id 对应）；老记录没有，为 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// claude 输出的结尾摘要（~500 字截断）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// 本次运行新建/修改的项目内文件相对路径清单。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<String>,
 }
 
 fn default_status() -> String {

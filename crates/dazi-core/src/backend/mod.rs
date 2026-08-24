@@ -54,6 +54,11 @@ pub trait CliBackend: Send + Sync {
     ) -> HeadlessSpec;
     /// 构建交互式启动命令（pty handoff 用，整行 shell 命令）。
     fn build_interactive_cmd(&self, prompt: &str) -> String;
+    /// 构建交互式 plan 模式启动命令（pty「先出计划」用，整行 shell 命令）。
+    /// 默认回退普通交互命令；支持 --permission-mode 的后端应 override 追加 plan 模式。
+    fn build_interactive_plan_cmd(&self, prompt: &str) -> String {
+        self.build_interactive_cmd(prompt)
+    }
     /// 构建继续上次会话命令（pty continue 用，整行 shell 命令）。
     fn build_continue_cmd(&self) -> String;
     /// 探活：<bin> --version，返回版本串或错误。
@@ -180,5 +185,6 @@ pub fn default_parse_claude_json(stdout: &str) -> Result<RunOutcome, String> {
         summary,
         session_id,
         usage,
+        artifacts: Vec::new(),
     })
 }

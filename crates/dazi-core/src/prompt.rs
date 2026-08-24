@@ -204,6 +204,22 @@ pub fn build_handoff_prompt(project_path: &Path) -> String {
     sections.join("\n\n")
 }
 
+/// 桌面端「先出计划」用的交互式 plan prompt：只读探索、制定计划、不执行。
+/// 配合 claude CLI 的 `--permission-mode plan`（只读模式）在终端里把计划呈现给用户，
+/// 用户确认后在同一会话内放行执行（WorkBuddy 教训：复杂任务先看方案再执行，质量更稳）。
+pub fn build_handoff_plan_prompt(project_path: &Path) -> String {
+    let mut sections = build_context_sections(project_path);
+    sections.push(
+        "## 任务（计划模式）\n你处于**计划模式**：只读探索、制定计划，不要执行任何写操作或命令（当前会话的权限设置也会阻止你改动文件）。请：\n\
+         1. 依据 README.md 与上面的上下文，理解本项目的目标与现状。\n\
+         2. 输出一份清晰的执行计划：要做哪些事、改哪些文件、跑什么命令、产出什么结果，按步骤列出，让用户一眼能判断是否放行。\n\
+         3. 明确标注其中任何**破坏性或不可逆**的操作（删除、覆盖、对外发送、装卸依赖、动 git 历史等）与风险点。\n\
+         4. 不要现在就执行——只输出计划。用户确认后会告诉你开始执行。"
+            .to_string(),
+    );
+    sections.join("\n\n")
+}
+
 /// 手机审批用的「计划」prompt：plan 模式下让 claude 只产出将要执行的计划，
 /// 供用户在手机上批准后再真正执行（配合 autopilot::run_plan）。
 pub fn build_plan_prompt(project_path: &Path) -> String {

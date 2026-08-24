@@ -8,7 +8,7 @@ use axum::{
 };
 use dazi_core::events::DaziEvent;
 use dazi_core::events::EventSink;
-use dazi_core::{autopilot, project, prompt, schedule};
+use dazi_core::{autopilot, project, prompt, schedule, usage};
 use serde::Deserialize;
 
 use crate::approval::Approval;
@@ -19,6 +19,13 @@ fn model_of(path: &std::path::Path) -> Option<String> {
         .ok()
         .and_then(|m| m.on_trigger)
         .and_then(|t| t.model)
+}
+
+/// usage 落盘（usage::append_usage）以项目目录名作为 project_slug，预估查询保持同一口径。
+fn usage_slug_of(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".to_string())
 }
 
 /// 为某项目以 plan 模式产出执行计划，登记为待批并推 approval-requested。
@@ -34,12 +41,17 @@ pub fn request_plan(state: &AppState, slug: &str) -> Result<Approval, String> {
 
     let outcome = autopilot::run_plan(&path, &plan_prompt, model.as_deref())?;
 
-    let approval = state.approvals.create(slug, &name, &outcome.summary);
+    // 基于历史 usage 预估本次执行花费；无任何历史时为 None。
+    let estimate = usage::estimate_run_cost(&usage_slug_of(&path));
+    let approval = state
+        .approvals
+        .create(slug, &name, &outcome.summary, estimate.clone());
     state.events.emit(DaziEvent::ApprovalRequested {
         slug: slug.to_string(),
         name,
         approval_id: approval.id.clone(),
         plan: outcome.summary,
+        estimate,
     });
     Ok(approval)
 }
@@ -108,7 +120,19 @@ pub async fn resolve_approval(
         Some(sid) => format!("{}\n[session: {sid}]", outcome.summary),
         None => outcome.summary.clone(),
     };
-    let _ = schedule::record_run(&path, "autopilot", outcome.ok, Some(msg));
+    // 结果回传：run_id 关联运行记录与事件，summary 取输出末尾 ~500 字，artifacts 为
+    // 本次运行新建/修改的项目内文件清单（run_autopilot 已做快照 diff）。
+    let run_id = format!("run-{}", chrono::Utc::now().timestamp_millis());
+    let tail = autopilot::tail_summary(&outcome.summary, autopilot::TAIL_SUMMARY_MAX);
+    let _ = schedule::record_run_ex(
+        &path,
+        "autopilot",
+        outcome.ok,
+        Some(msg),
+        Some(run_id.clone()),
+        Some(tail.clone()),
+        outcome.artifacts.clone(),
+    );
 
     state.events.emit(DaziEvent::ApprovalResolved {
         slug: slug.clone(),
@@ -119,7 +143,9 @@ pub async fn resolve_approval(
         slug,
         name,
         ok: outcome.ok,
-        summary: outcome.summary,
+        summary: tail,
+        run_id,
+        artifacts: outcome.artifacts,
     });
     Ok(Json(approval))
 }

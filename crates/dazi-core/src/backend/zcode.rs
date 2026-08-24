@@ -95,6 +95,7 @@ impl CliBackend for ZcodeBackend {
                 ),
                 session_id: None,
                 usage: None,
+                artifacts: Vec::new(),
             }),
         }
     }

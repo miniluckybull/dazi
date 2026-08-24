@@ -15,6 +15,12 @@ pub enum DaziEvent {
         name: String,
         ok: bool,
         summary: String,
+        /// 本次运行记录 id（与 meta.yml runs / GET /runs 对应，便于客户端关联历史）。
+        #[serde(default)]
+        run_id: String,
+        /// 本次运行在项目目录内新建/修改的文件相对路径清单（上限 50）。
+        #[serde(default)]
+        artifacts: Vec<String>,
     },
     /// 手机审批请求：autopilot 产出 dry-run 计划，等待用户批准。
     ApprovalRequested {
@@ -22,6 +28,9 @@ pub enum DaziEvent {
         name: String,
         approval_id: String,
         plan: String,
+        /// 基于 ~/.dazi/usage 历史的本次执行用量/费用预估；无历史时为 None。
+        #[serde(default)]
+        estimate: Option<crate::usage::UsageEstimate>,
     },
     /// 审批结果已落定（批准/拒绝），用于多端同步 UI。
     ApprovalResolved {

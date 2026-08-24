@@ -16,10 +16,81 @@ pub struct RunOutcome {
     /// 原始 usage 字段（input_tokens / output_tokens / cache_creation_input_tokens 等），
     /// 供 #16 token 监控落盘与月度统计；解析失败时为 None。
     pub usage: Option<serde_json::Value>,
+    /// 本次运行在项目目录内新建/修改的文件（相对路径，已排除内部目录，上限 ARTIFACTS_MAX）。
+    /// 仅 run_autopilot 真正执行时填充；plan 模式不 diff，为空。
+    pub artifacts: Vec<String>,
 }
 
 const TIMEOUT_SECS: u64 = 600; // 10 分钟硬超时
 const SUMMARY_MAX: usize = 600; // journal/run.message 截断长度
+/// 运行记录 / TaskCompleted 事件携带的结尾摘要长度（取输出末尾，~500 字）。
+pub const TAIL_SUMMARY_MAX: usize = 500;
+/// artifacts 清单上限，防止误扫大包目录时防爆。
+pub const ARTIFACTS_MAX: usize = 50;
+
+/// 取输出末尾最多 max 个字符作为结尾摘要（纯文本截断，按 char 边界切割）。
+pub fn tail_summary(s: &str, max: usize) -> String {
+    let t = s.trim();
+    let n = t.chars().count();
+    if n <= max {
+        t.to_string()
+    } else {
+        t.chars().skip(n - max).collect()
+    }
+}
+
+/// 快照里不参与 diff 的顶层目录：dazi 内部目录、VCS、依赖与构建产物。
+const IGNORED_DIRS: [&str; 4] = [".dazi", ".git", "node_modules", "target"];
+
+/// 项目目录文件快照：相对路径 → (mtime 秒, 字节数)。递归遍历，跳过 IGNORED_DIRS
+/// 与其余隐藏目录（. 开头）。仅用于执行前后 diff，容忍个别文件读取失败。
+pub type FileSnapshot = std::collections::HashMap<String, (i64, u64)>;
+
+pub fn snapshot_files(root: &Path) -> FileSnapshot {
+    let mut map = FileSnapshot::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(read) = std::fs::read_dir(&dir) else { continue };
+        for entry in read.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_dir() {
+                // 隐藏目录与已知内部/依赖目录一律跳过。
+                if name.starts_with('.') || IGNORED_DIRS.contains(&name.as_str()) {
+                    continue;
+                }
+                stack.push(path);
+            } else if ft.is_file() {
+                let Ok(meta) = entry.metadata() else { continue };
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                let rel = path
+                    .strip_prefix(root)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| path.to_string_lossy().to_string());
+                map.insert(rel, (mtime, meta.len()));
+            }
+        }
+    }
+    map
+}
+
+/// 执行前后快照 diff：新建或 mtime/大小变化的文件相对路径，排序后截断到 ARTIFACTS_MAX。
+pub fn diff_snapshots(before: &FileSnapshot, after: &FileSnapshot) -> Vec<String> {
+    let mut changed: Vec<String> = after
+        .iter()
+        .filter(|(path, stat)| before.get(*path) != Some(stat))
+        .map(|(path, _)| path.clone())
+        .collect();
+    changed.sort();
+    changed.truncate(ARTIFACTS_MAX);
+    changed
+}
 
 /// 解析 claude 可执行文件路径。GUI app 从 Finder 启动 / systemd 启动时 PATH 精简，
 /// 拿不到 homebrew、npm global 等目录，所以显式探测常见位置，最后回退裸 "claude"。
@@ -130,12 +201,17 @@ fn kill_child(child: &mut std::process::Child) {
 }
 
 /// headless 运行 claude 执行 autopilot prompt（bypassPermissions，真正改文件/跑命令）。
+/// 执行前后做文件快照 diff，把新建/修改的文件清单挂到 outcome.artifacts。
 pub fn run_autopilot(
     project_path: &Path,
     prompt: &str,
     model: Option<&str>,
 ) -> Result<RunOutcome, String> {
-    run_claude(project_path, prompt, model, "bypassPermissions")
+    let before = snapshot_files(project_path);
+    let mut outcome = run_claude(project_path, prompt, model, "bypassPermissions")?;
+    let after = snapshot_files(project_path);
+    outcome.artifacts = diff_snapshots(&before, &after);
+    Ok(outcome)
 }
 
 /// plan 模式跑 claude：只产出计划、不执行任何写操作或命令（由 claude CLI 强制保证）。
@@ -258,4 +334,39 @@ pub fn append_autopilot_journal(project_path: &Path, outcome: &RunOutcome) -> Re
     existing.push_str(&block);
     std::fs::write(&path, existing).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tail_summary_keeps_short_and_tails_long() {
+        assert_eq!(tail_summary("  短文本  ", 500), "短文本");
+        let long: String = (0..600).map(|i| char::from_digit(i % 10, 10).unwrap()).collect();
+        let t = tail_summary(&long, 500);
+        assert_eq!(t.chars().count(), 500);
+        assert!(t.ends_with('9')); // 取的是末尾
+    }
+
+    #[test]
+    fn snapshot_diff_finds_new_and_modified_skips_internal() {
+        let root = std::env::temp_dir().join(format!("dazi-snap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".dazi")).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("old.txt"), "v1").unwrap();
+        std::fs::write(root.join(".dazi/journal.md"), "j").unwrap();
+        let before = snapshot_files(&root);
+        // 新建 + 修改 + 内部目录变更（应被忽略）
+        std::fs::write(root.join("src/new.rs"), "fn main(){}").unwrap();
+        std::fs::write(root.join("old.txt"), "v2-longer").unwrap();
+        std::fs::write(root.join(".dazi/journal.md"), "j2").unwrap();
+        let after = snapshot_files(&root);
+        let artifacts = diff_snapshots(&before, &after);
+        assert!(artifacts.iter().any(|p| p.ends_with("src/new.rs")));
+        assert!(artifacts.iter().any(|p| p.ends_with("old.txt")));
+        assert!(!artifacts.iter().any(|p| p.contains(".dazi")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

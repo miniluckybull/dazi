@@ -144,12 +144,30 @@ pub fn record_run(
     ok: bool,
     message: Option<String>,
 ) -> Result<ProjectMeta, String> {
+    record_run_ex(project_path, action, ok, message, None, None, Vec::new())
+}
+
+/// 记录一次触发（带结果回传详情：run_id / 结尾摘要 / 产物清单），并重算 next_run_at。
+/// 新字段均为可选，老调用方走 record_run 即可。
+#[allow(clippy::too_many_arguments)]
+pub fn record_run_ex(
+    project_path: &Path,
+    action: &str,
+    ok: bool,
+    message: Option<String>,
+    run_id: Option<String>,
+    summary: Option<String>,
+    artifacts: Vec<String>,
+) -> Result<ProjectMeta, String> {
     let mut meta = read_meta(project_path)?;
     meta.runs.push(RunRecord {
         at: Utc::now(),
         action: action.to_string(),
         ok,
         message,
+        id: run_id,
+        summary,
+        artifacts,
     });
     meta.next_run_at = compute_next_run(&meta, Utc::now());
     write_meta(project_path, &meta)?;
@@ -223,6 +241,12 @@ pub struct RunEntry {
     pub action: String,
     pub ok: bool,
     pub message: Option<String>,
+    /// 运行 id（老记录为 None）。
+    pub id: Option<String>,
+    /// claude 输出的结尾摘要（~500 字截断，老记录为 None）。
+    pub summary: Option<String>,
+    /// 本次运行新建/修改的项目内文件相对路径清单。
+    pub artifacts: Vec<String>,
 }
 
 /// 汇总活动 + 归档项目的 meta.runs，按时间倒序取最近 limit 条。
@@ -240,6 +264,9 @@ pub fn list_recent_runs(workspace: &Path, limit: usize) -> Vec<RunEntry> {
                 action: r.action,
                 ok: r.ok,
                 message: r.message,
+                id: r.id,
+                summary: r.summary,
+                artifacts: r.artifacts,
             });
         }
     }

@@ -99,6 +99,7 @@ impl CliBackend for KimiBackend {
                 ),
                 session_id: None,
                 usage: None,
+                artifacts: Vec::new(),
             }),
         }
     }

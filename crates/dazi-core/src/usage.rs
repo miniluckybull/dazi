@@ -156,3 +156,62 @@ pub fn list_months() -> Result<Vec<String>, String> {
     months.sort_by(|a, b| b.cmp(a)); // 倒序
     Ok(months)
 }
+
+/// 一次 autopilot 执行的用量/费用预估（审批时展示给用户）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageEstimate {
+    /// 估算依据："project"（该项目历史均值）或 "global"（全部项目历史均值）。
+    pub scope: String,
+    /// 参与平均的历史样本数。
+    pub sample_size: u64,
+    pub avg_input_tokens: f64,
+    pub avg_output_tokens: f64,
+    pub avg_cost_usd: f64,
+}
+
+/// 项目历史样本不足时回退全局平均的阈值。
+const MIN_PROJECT_SAMPLES: usize = 3;
+
+fn average(entries: &[&UsageEntry], scope: &str) -> UsageEstimate {
+    let n = entries.len() as f64;
+    let sum = entries.iter().fold((0.0, 0.0, 0.0), |(i, o, c), e| {
+        (
+            i + e.input_tokens as f64,
+            o + e.output_tokens as f64,
+            c + e.cost_usd,
+        )
+    });
+    UsageEstimate {
+        scope: scope.to_string(),
+        sample_size: entries.len() as u64,
+        avg_input_tokens: sum.0 / n,
+        avg_output_tokens: sum.1 / n,
+        avg_cost_usd: sum.2 / n,
+    }
+}
+
+/// 基于 ~/.dazi/usage 历史估算一次 autopilot 执行的花费。
+/// 该项目历史 >= MIN_PROJECT_SAMPLES 次时用项目均值，否则用全局均值；
+/// 完全没有任何历史时返回 None（调用方不附预估字段）。
+pub fn estimate_run_cost(project_slug: &str) -> Option<UsageEstimate> {
+    let months = list_months().ok()?;
+    let mut all: Vec<UsageEntry> = Vec::new();
+    for m in months {
+        if let Ok(mo) = read_month(&m) {
+            all.extend(mo.entries);
+        }
+    }
+    if all.is_empty() {
+        return None;
+    }
+    let project: Vec<&UsageEntry> = all
+        .iter()
+        .filter(|e| e.project_slug == project_slug)
+        .collect();
+    if project.len() >= MIN_PROJECT_SAMPLES {
+        Some(average(&project, "project"))
+    } else {
+        let refs: Vec<&UsageEntry> = all.iter().collect();
+        Some(average(&refs, "global"))
+    }
+}

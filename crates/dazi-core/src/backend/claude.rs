@@ -44,6 +44,11 @@ impl CliBackend for ClaudeBackend {
         format!("{bin} \"{}\"", prompt.replace('\\', "\\\\").replace('"', "\\\""))
     }
 
+    fn build_interactive_plan_cmd(&self, prompt: &str) -> String {
+        // plan 模式：claude 只读探索产计划，由 CLI 强制不执行写操作，用户确认后放行。
+        format!("{} --permission-mode plan", self.build_interactive_cmd(prompt))
+    }
+
     fn build_continue_cmd(&self) -> String {
         format!("{} -c", self.resolve_bin())
     }
@@ -71,6 +76,7 @@ impl CliBackend for ClaudeBackend {
                 summary: format!("{e}\nstderr: {stderr}"),
                 session_id: None,
                 usage: None,
+                artifacts: Vec::new(),
             }),
         }
     }

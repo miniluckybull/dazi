@@ -24,6 +24,9 @@ pub struct Approval {
     pub plan: String,
     pub status: ApprovalStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// 基于 ~/.dazi/usage 历史的本次执行用量/费用预估；无历史时为 None。
+    #[serde(default)]
+    pub estimate: Option<dazi_core::usage::UsageEstimate>,
 }
 
 /// 落盘文件格式：seq 一并保存，避免重启后 id 与已留存的记录冲突。
@@ -99,7 +102,13 @@ impl ApprovalStore {
     }
 
     /// 登记一条待批计划，返回其 id。
-    pub fn create(&self, slug: &str, name: &str, plan: &str) -> Approval {
+    pub fn create(
+        &self,
+        slug: &str,
+        name: &str,
+        plan: &str,
+        estimate: Option<dazi_core::usage::UsageEstimate>,
+    ) -> Approval {
         let id = self.next_id();
         let approval = Approval {
             id: id.clone(),
@@ -108,6 +117,7 @@ impl ApprovalStore {
             plan: plan.to_string(),
             status: ApprovalStatus::Pending,
             created_at: chrono::Utc::now(),
+            estimate,
         };
         let mut items = self.items.lock().unwrap();
         items.insert(id, approval.clone());
@@ -155,7 +165,7 @@ mod tests {
     #[test]
     fn create_then_list_and_resolve() {
         let store = ApprovalStore::ephemeral();
-        let a = store.create("proj-x", "项目X", "计划：写文件 a.txt");
+        let a = store.create("proj-x", "项目X", "计划：写文件 a.txt", None);
         assert_eq!(a.status, ApprovalStatus::Pending);
         assert_eq!(store.list_pending().len(), 1);
 
@@ -173,7 +183,7 @@ mod tests {
     #[test]
     fn reject_keeps_record_but_not_pending() {
         let store = ApprovalStore::ephemeral();
-        let a = store.create("p", "P", "plan");
+        let a = store.create("p", "P", "plan", None);
         let r = store.resolve(&a.id, false).unwrap();
         assert_eq!(r.status, ApprovalStatus::Rejected);
         assert_eq!(store.list_pending().len(), 0);
