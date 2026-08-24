@@ -1,11 +1,13 @@
 //! 手机审批（human-in-the-loop，M2-4）。
 //! autopilot 先以 plan 模式产出计划 → 存入待批表 → 推 approval-requested 到手机；
-//! 用户批准后才以 bypassPermissions 真正执行。内存态，daemon 重启丢失（可接受）。
-use serde::Serialize;
+//! 用户批准后才以 bypassPermissions 真正执行。
+//! 审批记录持久化在 ~/.dazi/approvals.json，daemon 重启不丢。
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ApprovalStatus {
     Pending,
@@ -13,7 +15,7 @@ pub enum ApprovalStatus {
     Rejected,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Approval {
     pub id: String,
     pub slug: String,
@@ -24,15 +26,70 @@ pub struct Approval {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Default)]
+/// 落盘文件格式：seq 一并保存，避免重启后 id 与已留存的记录冲突。
+#[derive(Serialize, Deserialize, Default)]
+struct ApprovalsFile {
+    seq: u64,
+    items: Vec<Approval>,
+}
+
+fn approvals_path() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    let dir = PathBuf::from(home).join(".dazi");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir.join("approvals.json"))
+}
+
 pub struct ApprovalStore {
     items: Mutex<HashMap<String, Approval>>,
     seq: Mutex<u64>,
+    /// 落盘路径；None 表示纯内存（测试用）。
+    path: Option<PathBuf>,
 }
 
 impl ApprovalStore {
     pub fn new() -> Self {
-        Self::default()
+        let path = approvals_path();
+        let file = path
+            .as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|raw| serde_json::from_str::<ApprovalsFile>(&raw).ok())
+            .unwrap_or_default();
+        ApprovalStore {
+            items: Mutex::new(file.items.into_iter().map(|a| (a.id.clone(), a)).collect()),
+            seq: Mutex::new(file.seq),
+            path,
+        }
+    }
+
+    /// 纯内存 store（单元测试用，不触碰磁盘）。
+    #[cfg(test)]
+    fn ephemeral() -> Self {
+        ApprovalStore {
+            items: Mutex::new(HashMap::new()),
+            seq: Mutex::new(0),
+            path: None,
+        }
+    }
+
+    /// 把当前内存态写盘。调用方需持有 items 锁以保证快照一致。
+    /// 写失败仅告警，不影响内存态（重启丢失，与旧行为一致）。
+    fn save_locked(&self, items: &HashMap<String, Approval>) {
+        let Some(path) = &self.path else {
+            return;
+        };
+        let file = ApprovalsFile {
+            seq: *self.seq.lock().unwrap(),
+            items: items.values().cloned().collect(),
+        };
+        match serde_json::to_string_pretty(&file) {
+            Ok(raw) => {
+                if let Err(e) = std::fs::write(path, raw) {
+                    tracing::warn!("写入 {} 失败: {e}", path.display());
+                }
+            }
+            Err(e) => tracing::warn!("序列化 approvals 失败: {e}"),
+        }
     }
 
     fn next_id(&self) -> String {
@@ -52,10 +109,9 @@ impl ApprovalStore {
             status: ApprovalStatus::Pending,
             created_at: chrono::Utc::now(),
         };
-        self.items
-            .lock()
-            .unwrap()
-            .insert(id, approval.clone());
+        let mut items = self.items.lock().unwrap();
+        items.insert(id, approval.clone());
+        self.save_locked(&items);
         approval
     }
 
@@ -86,7 +142,9 @@ impl ApprovalStore {
         } else {
             ApprovalStatus::Rejected
         };
-        Some(a.clone())
+        let updated = a.clone();
+        self.save_locked(&items);
+        Some(updated)
     }
 }
 
@@ -96,7 +154,7 @@ mod tests {
 
     #[test]
     fn create_then_list_and_resolve() {
-        let store = ApprovalStore::new();
+        let store = ApprovalStore::ephemeral();
         let a = store.create("proj-x", "项目X", "计划：写文件 a.txt");
         assert_eq!(a.status, ApprovalStatus::Pending);
         assert_eq!(store.list_pending().len(), 1);
@@ -114,10 +172,11 @@ mod tests {
 
     #[test]
     fn reject_keeps_record_but_not_pending() {
-        let store = ApprovalStore::new();
+        let store = ApprovalStore::ephemeral();
         let a = store.create("p", "P", "plan");
         let r = store.resolve(&a.id, false).unwrap();
         assert_eq!(r.status, ApprovalStatus::Rejected);
         assert_eq!(store.list_pending().len(), 0);
     }
 }
+

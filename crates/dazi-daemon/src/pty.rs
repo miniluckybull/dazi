@@ -195,7 +195,7 @@ pub async fn ws_terminal_handler(
 fn ensure_session(
     state: &AppState,
     slug: &str,
-    cwd: &PathBuf,
+    cwd: &std::path::Path,
     launch: PtyLaunch,
     cols: u16,
     rows: u16,

@@ -117,10 +117,19 @@ async fn main() {
         Ok(v) => format!("  claude: ✓ {v}"),
         Err(e) => format!("  claude: ✗ 不可用 — {e}\n         （自动执行/审批将无法运行，请检查 claude 安装与登录）"),
     };
+    let daemon_url = format!("http://{}:{port}", lan_ipv4());
+    let pair_url = format!(
+        "dazi://pair?url={}&pin={}",
+        url_encode(&daemon_url),
+        auth.pin()
+    );
     println!("\n========================================");
     println!("  dazi-daemon 已启动: http://{addr}");
     println!("  配对 PIN: {}", auth.pin());
     println!("  （手机首次连接时输入此 PIN 完成配对）");
+    println!("  配对链接: {pair_url}");
+    println!("  扫码配对（手机 App 扫码自动填充地址与 PIN）:");
+    print_pair_qr(&pair_url);
     println!("{claude_line}");
     println!("========================================\n");
 
@@ -138,6 +147,47 @@ async fn main() {
         .with_graceful_shutdown(shutdown)
         .await
         .expect("服务异常退出");
+}
+
+/// 探测本机局域网 IPv4（UDP connect 不产生真实流量），找不到回退 127.0.0.1。
+fn lan_ipv4() -> String {
+    std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|s| {
+            s.connect("8.8.8.8:80")?;
+            s.local_addr()
+        })
+        .map(|a| a.ip().to_string())
+        .ok()
+        .filter(|ip| ip != "0.0.0.0")
+        .unwrap_or_else(|| "127.0.0.1".to_string())
+}
+
+/// 最小 URL percent-encoding（unreserved 之外全部转义）。
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// 在终端打印可扫描的二维码（unicode 半块渲染）。
+fn print_pair_qr(content: &str) {
+    match qrcode::QrCode::new(content.as_bytes()) {
+        Ok(code) => {
+            let art = code
+                .render::<qrcode::render::unicode::Dense1x2>()
+                .quiet_zone(true)
+                .build();
+            println!("{art}");
+        }
+        Err(e) => println!("  （二维码生成失败: {e}）"),
+    }
 }
 
 /// Bearer token 鉴权中间件。
