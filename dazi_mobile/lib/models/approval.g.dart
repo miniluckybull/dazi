@@ -12,8 +12,8 @@ _$ApprovalImpl _$$ApprovalImplFromJson(Map<String, dynamic> json) =>
       slug: json['slug'] as String,
       name: json['name'] as String,
       plan: json['plan'] as String,
-      resolved: json['resolved'] as bool,
-      approved: json['approved'] as bool?,
+      status: json['status'] as String,
+      createdAt: json['created_at'] as String?,
     );
 
 Map<String, dynamic> _$$ApprovalImplToJson(_$ApprovalImpl instance) =>
@@ -22,6 +22,6 @@ Map<String, dynamic> _$$ApprovalImplToJson(_$ApprovalImpl instance) =>
       'slug': instance.slug,
       'name': instance.name,
       'plan': instance.plan,
-      'resolved': instance.resolved,
-      'approved': instance.approved,
+      'status': instance.status,
+      'created_at': instance.createdAt,
     };

@@ -47,7 +47,13 @@ class EventsWebSocket {
   void _onMessage(dynamic message) {
     try {
       final json = jsonDecode(message as String) as Map<String, dynamic>;
-      final event = DaziEvent.fromJson(json);
+      // 服务端 DaziEvent 是 adjacently tagged：{"type": "...", "data": {...}}，
+      // 展开 data 后再按 freezed union 解析。
+      final data = json['data'];
+      final event = DaziEvent.fromJson({
+        'type': json['type'],
+        if (data is Map<String, dynamic>) ...data,
+      });
       _controller.add(event);
     } catch (_) {
       // Ignore malformed events.

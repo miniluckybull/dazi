@@ -43,7 +43,7 @@ _$ApprovalRequestedImpl _$$ApprovalRequestedImplFromJson(
     _$ApprovalRequestedImpl(
       slug: json['slug'] as String,
       name: json['name'] as String,
-      approvalId: json['approvalId'] as String,
+      approvalId: json['approval_id'] as String,
       plan: json['plan'] as String,
       $type: json['type'] as String?,
     );
@@ -53,7 +53,7 @@ Map<String, dynamic> _$$ApprovalRequestedImplToJson(
     <String, dynamic>{
       'slug': instance.slug,
       'name': instance.name,
-      'approvalId': instance.approvalId,
+      'approval_id': instance.approvalId,
       'plan': instance.plan,
       'type': instance.$type,
     };
@@ -62,7 +62,7 @@ _$ApprovalResolvedImpl _$$ApprovalResolvedImplFromJson(
         Map<String, dynamic> json) =>
     _$ApprovalResolvedImpl(
       slug: json['slug'] as String,
-      approvalId: json['approvalId'] as String,
+      approvalId: json['approval_id'] as String,
       approved: json['approved'] as bool,
       $type: json['type'] as String?,
     );
@@ -71,7 +71,7 @@ Map<String, dynamic> _$$ApprovalResolvedImplToJson(
         _$ApprovalResolvedImpl instance) =>
     <String, dynamic>{
       'slug': instance.slug,
-      'approvalId': instance.approvalId,
+      'approval_id': instance.approvalId,
       'approved': instance.approved,
       'type': instance.$type,
     };

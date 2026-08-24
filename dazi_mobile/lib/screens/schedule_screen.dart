@@ -33,7 +33,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     if (!mounted) return;
     setState(() {
       _taskType = meta.taskType;
-      _action = meta.schedule?.action ?? 'notify';
+      _action = meta.onTrigger?.action ?? 'notify';
       _runAt = _parseDateTime(meta.schedule?.runAt);
       _every = meta.schedule?.interval?.every ?? 1;
       _unit = meta.schedule?.interval?.unit ?? 'day';
@@ -73,21 +73,23 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       if (_taskType == 'oneoff') {
         schedule = schedule_models.Schedule(
           runAt: _runAt?.toUtc().toIso8601String(),
-          action: _action,
         );
       } else if (_taskType == 'scheduled') {
         schedule = schedule_models.Schedule(
           runAt: _runAt?.toUtc().toIso8601String(),
-          action: _action,
         );
       } else {
         schedule = schedule_models.Schedule(
           interval: schedule_models.Interval(every: _every, unit: _unit),
-          action: _action,
         );
       }
 
-      await ref.read(daziApiProvider).putSchedule(widget.slug, schedule);
+      await ref.read(daziApiProvider).putSchedule(
+            widget.slug,
+            taskType: _taskType,
+            schedule: schedule,
+            action: _action,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('调度已保存')),

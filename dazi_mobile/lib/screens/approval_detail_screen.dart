@@ -5,6 +5,35 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../models/approval.dart';
 import '../providers/approvals_provider.dart';
 
+/// 按 slug + id 从待批列表里查审批，供通知点击的 go_router 路由使用。
+/// 列表只含待批项；查不到说明已处理。
+class ApprovalDetailById extends ConsumerWidget {
+  const ApprovalDetailById({super.key, required this.slug, required this.id});
+
+  final String slug;
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final approvalsAsync = ref.watch(approvalsProvider);
+    return approvalsAsync.when(
+      data: (approvals) {
+        for (final approval in approvals) {
+          if (approval.id == id && approval.slug == slug) {
+            return ApprovalDetailScreen(approval: approval);
+          }
+        }
+        return Scaffold(
+          appBar: AppBar(title: const Text('审批')),
+          body: const Center(child: Text('审批不存在或已处理')),
+        );
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('加载失败: $e'))),
+    );
+  }
+}
+
 class ApprovalDetailScreen extends ConsumerWidget {
   const ApprovalDetailScreen({super.key, required this.approval});
 

@@ -23,9 +23,11 @@ mixin _$Approval {
   String get id => throw _privateConstructorUsedError;
   String get slug => throw _privateConstructorUsedError;
   String get name => throw _privateConstructorUsedError;
-  String get plan => throw _privateConstructorUsedError;
-  bool get resolved => throw _privateConstructorUsedError;
-  bool? get approved => throw _privateConstructorUsedError;
+  String get plan =>
+      throw _privateConstructorUsedError; // 服务端 ApprovalStatus：pending / approved / rejected。
+  String get status => throw _privateConstructorUsedError;
+  @JsonKey(name: 'created_at')
+  String? get createdAt => throw _privateConstructorUsedError;
 
   /// Serializes this Approval to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -47,8 +49,8 @@ abstract class $ApprovalCopyWith<$Res> {
       String slug,
       String name,
       String plan,
-      bool resolved,
-      bool? approved});
+      String status,
+      @JsonKey(name: 'created_at') String? createdAt});
 }
 
 /// @nodoc
@@ -70,8 +72,8 @@ class _$ApprovalCopyWithImpl<$Res, $Val extends Approval>
     Object? slug = null,
     Object? name = null,
     Object? plan = null,
-    Object? resolved = null,
-    Object? approved = freezed,
+    Object? status = null,
+    Object? createdAt = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -90,14 +92,14 @@ class _$ApprovalCopyWithImpl<$Res, $Val extends Approval>
           ? _value.plan
           : plan // ignore: cast_nullable_to_non_nullable
               as String,
-      resolved: null == resolved
-          ? _value.resolved
-          : resolved // ignore: cast_nullable_to_non_nullable
-              as bool,
-      approved: freezed == approved
-          ? _value.approved
-          : approved // ignore: cast_nullable_to_non_nullable
-              as bool?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdAt: freezed == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -115,8 +117,8 @@ abstract class _$$ApprovalImplCopyWith<$Res>
       String slug,
       String name,
       String plan,
-      bool resolved,
-      bool? approved});
+      String status,
+      @JsonKey(name: 'created_at') String? createdAt});
 }
 
 /// @nodoc
@@ -136,8 +138,8 @@ class __$$ApprovalImplCopyWithImpl<$Res>
     Object? slug = null,
     Object? name = null,
     Object? plan = null,
-    Object? resolved = null,
-    Object? approved = freezed,
+    Object? status = null,
+    Object? createdAt = freezed,
   }) {
     return _then(_$ApprovalImpl(
       id: null == id
@@ -156,14 +158,14 @@ class __$$ApprovalImplCopyWithImpl<$Res>
           ? _value.plan
           : plan // ignore: cast_nullable_to_non_nullable
               as String,
-      resolved: null == resolved
-          ? _value.resolved
-          : resolved // ignore: cast_nullable_to_non_nullable
-              as bool,
-      approved: freezed == approved
-          ? _value.approved
-          : approved // ignore: cast_nullable_to_non_nullable
-              as bool?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      createdAt: freezed == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -176,8 +178,8 @@ class _$ApprovalImpl implements _Approval {
       required this.slug,
       required this.name,
       required this.plan,
-      required this.resolved,
-      this.approved});
+      required this.status,
+      @JsonKey(name: 'created_at') this.createdAt});
 
   factory _$ApprovalImpl.fromJson(Map<String, dynamic> json) =>
       _$$ApprovalImplFromJson(json);
@@ -190,14 +192,16 @@ class _$ApprovalImpl implements _Approval {
   final String name;
   @override
   final String plan;
+// 服务端 ApprovalStatus：pending / approved / rejected。
   @override
-  final bool resolved;
+  final String status;
   @override
-  final bool? approved;
+  @JsonKey(name: 'created_at')
+  final String? createdAt;
 
   @override
   String toString() {
-    return 'Approval(id: $id, slug: $slug, name: $name, plan: $plan, resolved: $resolved, approved: $approved)';
+    return 'Approval(id: $id, slug: $slug, name: $name, plan: $plan, status: $status, createdAt: $createdAt)';
   }
 
   @override
@@ -209,16 +213,15 @@ class _$ApprovalImpl implements _Approval {
             (identical(other.slug, slug) || other.slug == slug) &&
             (identical(other.name, name) || other.name == name) &&
             (identical(other.plan, plan) || other.plan == plan) &&
-            (identical(other.resolved, resolved) ||
-                other.resolved == resolved) &&
-            (identical(other.approved, approved) ||
-                other.approved == approved));
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode =>
-      Object.hash(runtimeType, id, slug, name, plan, resolved, approved);
+      Object.hash(runtimeType, id, slug, name, plan, status, createdAt);
 
   /// Create a copy of Approval
   /// with the given fields replaced by the non-null parameter values.
@@ -242,8 +245,8 @@ abstract class _Approval implements Approval {
       required final String slug,
       required final String name,
       required final String plan,
-      required final bool resolved,
-      final bool? approved}) = _$ApprovalImpl;
+      required final String status,
+      @JsonKey(name: 'created_at') final String? createdAt}) = _$ApprovalImpl;
 
   factory _Approval.fromJson(Map<String, dynamic> json) =
       _$ApprovalImpl.fromJson;
@@ -255,11 +258,12 @@ abstract class _Approval implements Approval {
   @override
   String get name;
   @override
-  String get plan;
+  String get plan; // 服务端 ApprovalStatus：pending / approved / rejected。
   @override
-  bool get resolved;
+  String get status;
   @override
-  bool? get approved;
+  @JsonKey(name: 'created_at')
+  String? get createdAt;
 
   /// Create a copy of Approval
   /// with the given fields replaced by the non-null parameter values.

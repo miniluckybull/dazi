@@ -20,6 +20,17 @@ class Schedule with _$Schedule {
 }
 
 @freezed
+class OnTrigger with _$OnTrigger {
+  const factory OnTrigger({
+    String? action,
+    String? model,
+  }) = _OnTrigger;
+
+  factory OnTrigger.fromJson(Map<String, dynamic> json) =>
+      _$OnTriggerFromJson(json);
+}
+
+@freezed
 class Interval with _$Interval {
   const factory Interval({
     required int every,

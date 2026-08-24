@@ -43,25 +43,36 @@ class DaziApi {
 
   Future<String> getReadme(String slug) async {
     final response = await _dio.get(ApiPaths.readmePath(slug));
-    return response.data as String;
+    return _contentOf(response.data);
   }
 
   Future<void> putReadme(String slug, String content) async {
-    await _dio.put(ApiPaths.readmePath(slug), data: content);
+    await _dio.put(ApiPaths.readmePath(slug), data: {'content': content});
   }
 
   Future<String> getJournal(String slug) async {
     final response = await _dio.get(ApiPaths.journalPath(slug));
-    return response.data as String;
+    return _contentOf(response.data);
   }
 
   Future<String> getContext(String slug) async {
     final response = await _dio.get(ApiPaths.contextPath(slug));
-    return response.data as String;
+    return _contentOf(response.data);
   }
 
-  Future<void> putSchedule(String slug, Schedule schedule) async {
-    await _dio.put(ApiPaths.schedulePath(slug), data: schedule.toJson());
+  /// 服务端期望 SchedulePatch { task_type, schedule, on_trigger }。
+  /// 触发动作（notify/autopilot）在 on_trigger.action，不在 schedule 里。
+  Future<void> putSchedule(
+    String slug, {
+    required String taskType,
+    Schedule? schedule,
+    String? action,
+  }) async {
+    await _dio.put(ApiPaths.schedulePath(slug), data: {
+      'task_type': taskType,
+      'schedule': schedule?.toJson(),
+      'on_trigger': {'action': action ?? 'notify'},
+    });
   }
 
   Future<List<Approval>> getApprovals() async {
@@ -76,14 +87,18 @@ class DaziApi {
 
   Future<String> getMemory(String name) async {
     final response = await _dio.get(ApiPaths.memoryPath(name));
-    return response.data as String;
+    return _contentOf(response.data);
   }
 
   Future<void> putMemory(String name, String content) async {
-    await _dio.put(ApiPaths.memoryPath(name), data: content);
+    await _dio.put(ApiPaths.memoryPath(name), data: {'content': content});
   }
 
   Future<void> killTerminal(String slug) async {
     await _dio.delete(ApiPaths.terminalPath(slug));
   }
+
+  /// 服务端文本端点统一返回 {"content": "..."}。
+  String _contentOf(dynamic data) =>
+      (data as Map<String, dynamic>)['content'] as String;
 }

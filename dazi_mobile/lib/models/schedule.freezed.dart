@@ -316,6 +316,171 @@ abstract class _Schedule implements Schedule {
       throw _privateConstructorUsedError;
 }
 
+OnTrigger _$OnTriggerFromJson(Map<String, dynamic> json) {
+  return _OnTrigger.fromJson(json);
+}
+
+/// @nodoc
+mixin _$OnTrigger {
+  String? get action => throw _privateConstructorUsedError;
+  String? get model => throw _privateConstructorUsedError;
+
+  /// Serializes this OnTrigger to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of OnTrigger
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $OnTriggerCopyWith<OnTrigger> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OnTriggerCopyWith<$Res> {
+  factory $OnTriggerCopyWith(OnTrigger value, $Res Function(OnTrigger) then) =
+      _$OnTriggerCopyWithImpl<$Res, OnTrigger>;
+  @useResult
+  $Res call({String? action, String? model});
+}
+
+/// @nodoc
+class _$OnTriggerCopyWithImpl<$Res, $Val extends OnTrigger>
+    implements $OnTriggerCopyWith<$Res> {
+  _$OnTriggerCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of OnTrigger
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? action = freezed,
+    Object? model = freezed,
+  }) {
+    return _then(_value.copyWith(
+      action: freezed == action
+          ? _value.action
+          : action // ignore: cast_nullable_to_non_nullable
+              as String?,
+      model: freezed == model
+          ? _value.model
+          : model // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$OnTriggerImplCopyWith<$Res>
+    implements $OnTriggerCopyWith<$Res> {
+  factory _$$OnTriggerImplCopyWith(
+          _$OnTriggerImpl value, $Res Function(_$OnTriggerImpl) then) =
+      __$$OnTriggerImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String? action, String? model});
+}
+
+/// @nodoc
+class __$$OnTriggerImplCopyWithImpl<$Res>
+    extends _$OnTriggerCopyWithImpl<$Res, _$OnTriggerImpl>
+    implements _$$OnTriggerImplCopyWith<$Res> {
+  __$$OnTriggerImplCopyWithImpl(
+      _$OnTriggerImpl _value, $Res Function(_$OnTriggerImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OnTrigger
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? action = freezed,
+    Object? model = freezed,
+  }) {
+    return _then(_$OnTriggerImpl(
+      action: freezed == action
+          ? _value.action
+          : action // ignore: cast_nullable_to_non_nullable
+              as String?,
+      model: freezed == model
+          ? _value.model
+          : model // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$OnTriggerImpl implements _OnTrigger {
+  const _$OnTriggerImpl({this.action, this.model});
+
+  factory _$OnTriggerImpl.fromJson(Map<String, dynamic> json) =>
+      _$$OnTriggerImplFromJson(json);
+
+  @override
+  final String? action;
+  @override
+  final String? model;
+
+  @override
+  String toString() {
+    return 'OnTrigger(action: $action, model: $model)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OnTriggerImpl &&
+            (identical(other.action, action) || other.action == action) &&
+            (identical(other.model, model) || other.model == model));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, action, model);
+
+  /// Create a copy of OnTrigger
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OnTriggerImplCopyWith<_$OnTriggerImpl> get copyWith =>
+      __$$OnTriggerImplCopyWithImpl<_$OnTriggerImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$OnTriggerImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _OnTrigger implements OnTrigger {
+  const factory _OnTrigger({final String? action, final String? model}) =
+      _$OnTriggerImpl;
+
+  factory _OnTrigger.fromJson(Map<String, dynamic> json) =
+      _$OnTriggerImpl.fromJson;
+
+  @override
+  String? get action;
+  @override
+  String? get model;
+
+  /// Create a copy of OnTrigger
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$OnTriggerImplCopyWith<_$OnTriggerImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 Interval _$IntervalFromJson(Map<String, dynamic> json) {
   return _Interval.fromJson(json);
 }

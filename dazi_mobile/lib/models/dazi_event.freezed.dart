@@ -39,10 +39,11 @@ mixin _$DaziEvent {
     required TResult Function(String slug, String name) taskTriggered,
     required TResult Function(String slug, String name, bool ok, String summary)
         taskCompleted,
-    required TResult Function(
-            String slug, String name, String approvalId, String plan)
+    required TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)
         approvalRequested,
-    required TResult Function(String slug, String approvalId, bool approved)
+    required TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) =>
       throw _privateConstructorUsedError;
@@ -51,9 +52,11 @@ mixin _$DaziEvent {
     TResult? Function(String slug, String name)? taskTriggered,
     TResult? Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult? Function(String slug, String name, String approvalId, String plan)?
+    TResult? Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult? Function(String slug, String approvalId, bool approved)?
+    TResult? Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) =>
       throw _privateConstructorUsedError;
@@ -62,9 +65,11 @@ mixin _$DaziEvent {
     TResult Function(String slug, String name)? taskTriggered,
     TResult Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult Function(String slug, String name, String approvalId, String plan)?
+    TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult Function(String slug, String approvalId, bool approved)?
+    TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
     required TResult orElse(),
   }) =>
@@ -229,10 +234,11 @@ class _$TaskTriggeredImpl implements TaskTriggered {
     required TResult Function(String slug, String name) taskTriggered,
     required TResult Function(String slug, String name, bool ok, String summary)
         taskCompleted,
-    required TResult Function(
-            String slug, String name, String approvalId, String plan)
+    required TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)
         approvalRequested,
-    required TResult Function(String slug, String approvalId, bool approved)
+    required TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
     return taskTriggered(slug, name);
@@ -244,9 +250,11 @@ class _$TaskTriggeredImpl implements TaskTriggered {
     TResult? Function(String slug, String name)? taskTriggered,
     TResult? Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult? Function(String slug, String name, String approvalId, String plan)?
+    TResult? Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult? Function(String slug, String approvalId, bool approved)?
+    TResult? Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
     return taskTriggered?.call(slug, name);
@@ -258,9 +266,11 @@ class _$TaskTriggeredImpl implements TaskTriggered {
     TResult Function(String slug, String name)? taskTriggered,
     TResult Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult Function(String slug, String name, String approvalId, String plan)?
+    TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult Function(String slug, String approvalId, bool approved)?
+    TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
     required TResult orElse(),
   }) {
@@ -445,10 +455,11 @@ class _$TaskCompletedImpl implements TaskCompleted {
     required TResult Function(String slug, String name) taskTriggered,
     required TResult Function(String slug, String name, bool ok, String summary)
         taskCompleted,
-    required TResult Function(
-            String slug, String name, String approvalId, String plan)
+    required TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)
         approvalRequested,
-    required TResult Function(String slug, String approvalId, bool approved)
+    required TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
     return taskCompleted(slug, name, ok, summary);
@@ -460,9 +471,11 @@ class _$TaskCompletedImpl implements TaskCompleted {
     TResult? Function(String slug, String name)? taskTriggered,
     TResult? Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult? Function(String slug, String name, String approvalId, String plan)?
+    TResult? Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult? Function(String slug, String approvalId, bool approved)?
+    TResult? Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
     return taskCompleted?.call(slug, name, ok, summary);
@@ -474,9 +487,11 @@ class _$TaskCompletedImpl implements TaskCompleted {
     TResult Function(String slug, String name)? taskTriggered,
     TResult Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult Function(String slug, String name, String approvalId, String plan)?
+    TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult Function(String slug, String approvalId, bool approved)?
+    TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
     required TResult orElse(),
   }) {
@@ -563,7 +578,11 @@ abstract class _$$ApprovalRequestedImplCopyWith<$Res>
       __$$ApprovalRequestedImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String slug, String name, String approvalId, String plan});
+  $Res call(
+      {String slug,
+      String name,
+      @JsonKey(name: 'approval_id') String approvalId,
+      String plan});
 }
 
 /// @nodoc
@@ -611,7 +630,7 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
   const _$ApprovalRequestedImpl(
       {required this.slug,
       required this.name,
-      required this.approvalId,
+      @JsonKey(name: 'approval_id') required this.approvalId,
       required this.plan,
       final String? $type})
       : $type = $type ?? 'approval-requested';
@@ -624,6 +643,7 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
   @override
   final String name;
   @override
+  @JsonKey(name: 'approval_id')
   final String approvalId;
   @override
   final String plan;
@@ -667,10 +687,11 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
     required TResult Function(String slug, String name) taskTriggered,
     required TResult Function(String slug, String name, bool ok, String summary)
         taskCompleted,
-    required TResult Function(
-            String slug, String name, String approvalId, String plan)
+    required TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)
         approvalRequested,
-    required TResult Function(String slug, String approvalId, bool approved)
+    required TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
     return approvalRequested(slug, name, approvalId, plan);
@@ -682,9 +703,11 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
     TResult? Function(String slug, String name)? taskTriggered,
     TResult? Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult? Function(String slug, String name, String approvalId, String plan)?
+    TResult? Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult? Function(String slug, String approvalId, bool approved)?
+    TResult? Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
     return approvalRequested?.call(slug, name, approvalId, plan);
@@ -696,9 +719,11 @@ class _$ApprovalRequestedImpl implements ApprovalRequested {
     TResult Function(String slug, String name)? taskTriggered,
     TResult Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult Function(String slug, String name, String approvalId, String plan)?
+    TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult Function(String slug, String approvalId, bool approved)?
+    TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
     required TResult orElse(),
   }) {
@@ -757,7 +782,7 @@ abstract class ApprovalRequested implements DaziEvent {
   const factory ApprovalRequested(
       {required final String slug,
       required final String name,
-      required final String approvalId,
+      @JsonKey(name: 'approval_id') required final String approvalId,
       required final String plan}) = _$ApprovalRequestedImpl;
 
   factory ApprovalRequested.fromJson(Map<String, dynamic> json) =
@@ -766,6 +791,7 @@ abstract class ApprovalRequested implements DaziEvent {
   @override
   String get slug;
   String get name;
+  @JsonKey(name: 'approval_id')
   String get approvalId;
   String get plan;
 
@@ -785,7 +811,10 @@ abstract class _$$ApprovalResolvedImplCopyWith<$Res>
       __$$ApprovalResolvedImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String slug, String approvalId, bool approved});
+  $Res call(
+      {String slug,
+      @JsonKey(name: 'approval_id') String approvalId,
+      bool approved});
 }
 
 /// @nodoc
@@ -827,7 +856,7 @@ class __$$ApprovalResolvedImplCopyWithImpl<$Res>
 class _$ApprovalResolvedImpl implements ApprovalResolved {
   const _$ApprovalResolvedImpl(
       {required this.slug,
-      required this.approvalId,
+      @JsonKey(name: 'approval_id') required this.approvalId,
       required this.approved,
       final String? $type})
       : $type = $type ?? 'approval-resolved';
@@ -838,6 +867,7 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
   @override
   final String slug;
   @override
+  @JsonKey(name: 'approval_id')
   final String approvalId;
   @override
   final bool approved;
@@ -881,10 +911,11 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
     required TResult Function(String slug, String name) taskTriggered,
     required TResult Function(String slug, String name, bool ok, String summary)
         taskCompleted,
-    required TResult Function(
-            String slug, String name, String approvalId, String plan)
+    required TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)
         approvalRequested,
-    required TResult Function(String slug, String approvalId, bool approved)
+    required TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)
         approvalResolved,
   }) {
     return approvalResolved(slug, approvalId, approved);
@@ -896,9 +927,11 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
     TResult? Function(String slug, String name)? taskTriggered,
     TResult? Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult? Function(String slug, String name, String approvalId, String plan)?
+    TResult? Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult? Function(String slug, String approvalId, bool approved)?
+    TResult? Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
   }) {
     return approvalResolved?.call(slug, approvalId, approved);
@@ -910,9 +943,11 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
     TResult Function(String slug, String name)? taskTriggered,
     TResult Function(String slug, String name, bool ok, String summary)?
         taskCompleted,
-    TResult Function(String slug, String name, String approvalId, String plan)?
+    TResult Function(String slug, String name,
+            @JsonKey(name: 'approval_id') String approvalId, String plan)?
         approvalRequested,
-    TResult Function(String slug, String approvalId, bool approved)?
+    TResult Function(String slug,
+            @JsonKey(name: 'approval_id') String approvalId, bool approved)?
         approvalResolved,
     required TResult orElse(),
   }) {
@@ -970,7 +1005,7 @@ class _$ApprovalResolvedImpl implements ApprovalResolved {
 abstract class ApprovalResolved implements DaziEvent {
   const factory ApprovalResolved(
       {required final String slug,
-      required final String approvalId,
+      @JsonKey(name: 'approval_id') required final String approvalId,
       required final bool approved}) = _$ApprovalResolvedImpl;
 
   factory ApprovalResolved.fromJson(Map<String, dynamic> json) =
@@ -978,6 +1013,7 @@ abstract class ApprovalResolved implements DaziEvent {
 
   @override
   String get slug;
+  @JsonKey(name: 'approval_id')
   String get approvalId;
   bool get approved;
 

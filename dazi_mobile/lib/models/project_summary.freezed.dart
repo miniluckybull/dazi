@@ -25,8 +25,11 @@ mixin _$ProjectSummary {
   String get status => throw _privateConstructorUsedError;
   String get priority => throw _privateConstructorUsedError;
   bool get archived => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requires_references')
   bool get requiresReferences => throw _privateConstructorUsedError;
+  @JsonKey(name: 'has_references')
   bool get hasReferences => throw _privateConstructorUsedError;
+  @JsonKey(name: 'task_type')
   String get taskType => throw _privateConstructorUsedError;
   @JsonKey(name: 'handed_off_at')
   String? get handedOffAt => throw _privateConstructorUsedError;
@@ -60,9 +63,9 @@ abstract class $ProjectSummaryCopyWith<$Res> {
       String status,
       String priority,
       bool archived,
-      bool requiresReferences,
-      bool hasReferences,
-      String taskType,
+      @JsonKey(name: 'requires_references') bool requiresReferences,
+      @JsonKey(name: 'has_references') bool hasReferences,
+      @JsonKey(name: 'task_type') String taskType,
       @JsonKey(name: 'handed_off_at') String? handedOffAt,
       @JsonKey(name: 'next_run_at') String? nextRunAt,
       @JsonKey(name: 'last_run_at') String? lastRunAt,
@@ -170,9 +173,9 @@ abstract class _$$ProjectSummaryImplCopyWith<$Res>
       String status,
       String priority,
       bool archived,
-      bool requiresReferences,
-      bool hasReferences,
-      String taskType,
+      @JsonKey(name: 'requires_references') bool requiresReferences,
+      @JsonKey(name: 'has_references') bool hasReferences,
+      @JsonKey(name: 'task_type') String taskType,
       @JsonKey(name: 'handed_off_at') String? handedOffAt,
       @JsonKey(name: 'next_run_at') String? nextRunAt,
       @JsonKey(name: 'last_run_at') String? lastRunAt,
@@ -273,9 +276,9 @@ class _$ProjectSummaryImpl implements _ProjectSummary {
       required this.status,
       required this.priority,
       required this.archived,
-      required this.requiresReferences,
-      required this.hasReferences,
-      required this.taskType,
+      @JsonKey(name: 'requires_references') required this.requiresReferences,
+      @JsonKey(name: 'has_references') required this.hasReferences,
+      @JsonKey(name: 'task_type') required this.taskType,
       @JsonKey(name: 'handed_off_at') this.handedOffAt,
       @JsonKey(name: 'next_run_at') this.nextRunAt,
       @JsonKey(name: 'last_run_at') this.lastRunAt,
@@ -297,10 +300,13 @@ class _$ProjectSummaryImpl implements _ProjectSummary {
   @override
   final bool archived;
   @override
+  @JsonKey(name: 'requires_references')
   final bool requiresReferences;
   @override
+  @JsonKey(name: 'has_references')
   final bool hasReferences;
   @override
+  @JsonKey(name: 'task_type')
   final String taskType;
   @override
   @JsonKey(name: 'handed_off_at')
@@ -400,9 +406,10 @@ abstract class _ProjectSummary implements ProjectSummary {
       required final String status,
       required final String priority,
       required final bool archived,
+      @JsonKey(name: 'requires_references')
       required final bool requiresReferences,
-      required final bool hasReferences,
-      required final String taskType,
+      @JsonKey(name: 'has_references') required final bool hasReferences,
+      @JsonKey(name: 'task_type') required final String taskType,
       @JsonKey(name: 'handed_off_at') final String? handedOffAt,
       @JsonKey(name: 'next_run_at') final String? nextRunAt,
       @JsonKey(name: 'last_run_at') final String? lastRunAt,
@@ -423,10 +430,13 @@ abstract class _ProjectSummary implements ProjectSummary {
   @override
   bool get archived;
   @override
+  @JsonKey(name: 'requires_references')
   bool get requiresReferences;
   @override
+  @JsonKey(name: 'has_references')
   bool get hasReferences;
   @override
+  @JsonKey(name: 'task_type')
   String get taskType;
   @override
   @JsonKey(name: 'handed_off_at')

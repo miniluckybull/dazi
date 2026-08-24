@@ -30,6 +30,18 @@ Map<String, dynamic> _$$ScheduleImplToJson(_$ScheduleImpl instance) =>
       'model': instance.model,
     };
 
+_$OnTriggerImpl _$$OnTriggerImplFromJson(Map<String, dynamic> json) =>
+    _$OnTriggerImpl(
+      action: json['action'] as String?,
+      model: json['model'] as String?,
+    );
+
+Map<String, dynamic> _$$OnTriggerImplToJson(_$OnTriggerImpl instance) =>
+    <String, dynamic>{
+      'action': instance.action,
+      'model': instance.model,
+    };
+
 _$IntervalImpl _$$IntervalImplFromJson(Map<String, dynamic> json) =>
     _$IntervalImpl(
       every: (json['every'] as num).toInt(),

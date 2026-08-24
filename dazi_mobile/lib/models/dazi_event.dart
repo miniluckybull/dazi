@@ -20,13 +20,13 @@ class DaziEvent with _$DaziEvent {
   const factory DaziEvent.approvalRequested({
     required String slug,
     required String name,
-    required String approvalId,
+    @JsonKey(name: 'approval_id') required String approvalId,
     required String plan,
   }) = ApprovalRequested;
 
   const factory DaziEvent.approvalResolved({
     required String slug,
-    required String approvalId,
+    @JsonKey(name: 'approval_id') required String approvalId,
     required bool approved,
   }) = ApprovalResolved;
 

@@ -25,7 +25,9 @@ mixin _$ProjectMeta {
   String get status => throw _privateConstructorUsedError;
   String get priority => throw _privateConstructorUsedError;
   bool get archived => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requires_references')
   bool get requiresReferences => throw _privateConstructorUsedError;
+  @JsonKey(name: 'task_type')
   String get taskType => throw _privateConstructorUsedError;
   List<String>? get tags => throw _privateConstructorUsedError;
   @JsonKey(name: 'start_date')
@@ -35,6 +37,8 @@ mixin _$ProjectMeta {
   @JsonKey(name: 'handed_off_at')
   String? get handedOffAt => throw _privateConstructorUsedError;
   Schedule? get schedule => throw _privateConstructorUsedError;
+  @JsonKey(name: 'on_trigger')
+  OnTrigger? get onTrigger => throw _privateConstructorUsedError;
   @JsonKey(name: 'next_run_at')
   String? get nextRunAt => throw _privateConstructorUsedError;
   @JsonKey(name: 'last_run_at')
@@ -66,19 +70,21 @@ abstract class $ProjectMetaCopyWith<$Res> {
       String status,
       String priority,
       bool archived,
-      bool requiresReferences,
-      String taskType,
+      @JsonKey(name: 'requires_references') bool requiresReferences,
+      @JsonKey(name: 'task_type') String taskType,
       List<String>? tags,
       @JsonKey(name: 'start_date') String? startDate,
       @JsonKey(name: 'due_date') String? dueDate,
       @JsonKey(name: 'handed_off_at') String? handedOffAt,
       Schedule? schedule,
+      @JsonKey(name: 'on_trigger') OnTrigger? onTrigger,
       @JsonKey(name: 'next_run_at') String? nextRunAt,
       @JsonKey(name: 'last_run_at') String? lastRunAt,
       @JsonKey(name: 'last_run_ok') bool? lastRunOk,
       @JsonKey(name: 'runs') List<RunRecord>? runs});
 
   $ScheduleCopyWith<$Res>? get schedule;
+  $OnTriggerCopyWith<$Res>? get onTrigger;
 }
 
 /// @nodoc
@@ -108,6 +114,7 @@ class _$ProjectMetaCopyWithImpl<$Res, $Val extends ProjectMeta>
     Object? dueDate = freezed,
     Object? handedOffAt = freezed,
     Object? schedule = freezed,
+    Object? onTrigger = freezed,
     Object? nextRunAt = freezed,
     Object? lastRunAt = freezed,
     Object? lastRunOk = freezed,
@@ -162,6 +169,10 @@ class _$ProjectMetaCopyWithImpl<$Res, $Val extends ProjectMeta>
           ? _value.schedule
           : schedule // ignore: cast_nullable_to_non_nullable
               as Schedule?,
+      onTrigger: freezed == onTrigger
+          ? _value.onTrigger
+          : onTrigger // ignore: cast_nullable_to_non_nullable
+              as OnTrigger?,
       nextRunAt: freezed == nextRunAt
           ? _value.nextRunAt
           : nextRunAt // ignore: cast_nullable_to_non_nullable
@@ -194,6 +205,20 @@ class _$ProjectMetaCopyWithImpl<$Res, $Val extends ProjectMeta>
       return _then(_value.copyWith(schedule: value) as $Val);
     });
   }
+
+  /// Create a copy of ProjectMeta
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $OnTriggerCopyWith<$Res>? get onTrigger {
+    if (_value.onTrigger == null) {
+      return null;
+    }
+
+    return $OnTriggerCopyWith<$Res>(_value.onTrigger!, (value) {
+      return _then(_value.copyWith(onTrigger: value) as $Val);
+    });
+  }
 }
 
 /// @nodoc
@@ -210,13 +235,14 @@ abstract class _$$ProjectMetaImplCopyWith<$Res>
       String status,
       String priority,
       bool archived,
-      bool requiresReferences,
-      String taskType,
+      @JsonKey(name: 'requires_references') bool requiresReferences,
+      @JsonKey(name: 'task_type') String taskType,
       List<String>? tags,
       @JsonKey(name: 'start_date') String? startDate,
       @JsonKey(name: 'due_date') String? dueDate,
       @JsonKey(name: 'handed_off_at') String? handedOffAt,
       Schedule? schedule,
+      @JsonKey(name: 'on_trigger') OnTrigger? onTrigger,
       @JsonKey(name: 'next_run_at') String? nextRunAt,
       @JsonKey(name: 'last_run_at') String? lastRunAt,
       @JsonKey(name: 'last_run_ok') bool? lastRunOk,
@@ -224,6 +250,8 @@ abstract class _$$ProjectMetaImplCopyWith<$Res>
 
   @override
   $ScheduleCopyWith<$Res>? get schedule;
+  @override
+  $OnTriggerCopyWith<$Res>? get onTrigger;
 }
 
 /// @nodoc
@@ -251,6 +279,7 @@ class __$$ProjectMetaImplCopyWithImpl<$Res>
     Object? dueDate = freezed,
     Object? handedOffAt = freezed,
     Object? schedule = freezed,
+    Object? onTrigger = freezed,
     Object? nextRunAt = freezed,
     Object? lastRunAt = freezed,
     Object? lastRunOk = freezed,
@@ -305,6 +334,10 @@ class __$$ProjectMetaImplCopyWithImpl<$Res>
           ? _value.schedule
           : schedule // ignore: cast_nullable_to_non_nullable
               as Schedule?,
+      onTrigger: freezed == onTrigger
+          ? _value.onTrigger
+          : onTrigger // ignore: cast_nullable_to_non_nullable
+              as OnTrigger?,
       nextRunAt: freezed == nextRunAt
           ? _value.nextRunAt
           : nextRunAt // ignore: cast_nullable_to_non_nullable
@@ -333,14 +366,15 @@ class _$ProjectMetaImpl implements _ProjectMeta {
       required this.name,
       required this.status,
       required this.priority,
-      required this.archived,
-      required this.requiresReferences,
-      required this.taskType,
+      this.archived = false,
+      @JsonKey(name: 'requires_references') required this.requiresReferences,
+      @JsonKey(name: 'task_type') required this.taskType,
       final List<String>? tags,
       @JsonKey(name: 'start_date') this.startDate,
       @JsonKey(name: 'due_date') this.dueDate,
       @JsonKey(name: 'handed_off_at') this.handedOffAt,
       this.schedule,
+      @JsonKey(name: 'on_trigger') this.onTrigger,
       @JsonKey(name: 'next_run_at') this.nextRunAt,
       @JsonKey(name: 'last_run_at') this.lastRunAt,
       @JsonKey(name: 'last_run_ok') this.lastRunOk,
@@ -360,10 +394,13 @@ class _$ProjectMetaImpl implements _ProjectMeta {
   @override
   final String priority;
   @override
+  @JsonKey()
   final bool archived;
   @override
+  @JsonKey(name: 'requires_references')
   final bool requiresReferences;
   @override
+  @JsonKey(name: 'task_type')
   final String taskType;
   final List<String>? _tags;
   @override
@@ -387,6 +424,9 @@ class _$ProjectMetaImpl implements _ProjectMeta {
   @override
   final Schedule? schedule;
   @override
+  @JsonKey(name: 'on_trigger')
+  final OnTrigger? onTrigger;
+  @override
   @JsonKey(name: 'next_run_at')
   final String? nextRunAt;
   @override
@@ -408,7 +448,7 @@ class _$ProjectMetaImpl implements _ProjectMeta {
 
   @override
   String toString() {
-    return 'ProjectMeta(slug: $slug, name: $name, status: $status, priority: $priority, archived: $archived, requiresReferences: $requiresReferences, taskType: $taskType, tags: $tags, startDate: $startDate, dueDate: $dueDate, handedOffAt: $handedOffAt, schedule: $schedule, nextRunAt: $nextRunAt, lastRunAt: $lastRunAt, lastRunOk: $lastRunOk, runs: $runs)';
+    return 'ProjectMeta(slug: $slug, name: $name, status: $status, priority: $priority, archived: $archived, requiresReferences: $requiresReferences, taskType: $taskType, tags: $tags, startDate: $startDate, dueDate: $dueDate, handedOffAt: $handedOffAt, schedule: $schedule, onTrigger: $onTrigger, nextRunAt: $nextRunAt, lastRunAt: $lastRunAt, lastRunOk: $lastRunOk, runs: $runs)';
   }
 
   @override
@@ -435,6 +475,8 @@ class _$ProjectMetaImpl implements _ProjectMeta {
                 other.handedOffAt == handedOffAt) &&
             (identical(other.schedule, schedule) ||
                 other.schedule == schedule) &&
+            (identical(other.onTrigger, onTrigger) ||
+                other.onTrigger == onTrigger) &&
             (identical(other.nextRunAt, nextRunAt) ||
                 other.nextRunAt == nextRunAt) &&
             (identical(other.lastRunAt, lastRunAt) ||
@@ -460,6 +502,7 @@ class _$ProjectMetaImpl implements _ProjectMeta {
       dueDate,
       handedOffAt,
       schedule,
+      onTrigger,
       nextRunAt,
       lastRunAt,
       lastRunOk,
@@ -487,14 +530,16 @@ abstract class _ProjectMeta implements ProjectMeta {
       required final String name,
       required final String status,
       required final String priority,
-      required final bool archived,
+      final bool archived,
+      @JsonKey(name: 'requires_references')
       required final bool requiresReferences,
-      required final String taskType,
+      @JsonKey(name: 'task_type') required final String taskType,
       final List<String>? tags,
       @JsonKey(name: 'start_date') final String? startDate,
       @JsonKey(name: 'due_date') final String? dueDate,
       @JsonKey(name: 'handed_off_at') final String? handedOffAt,
       final Schedule? schedule,
+      @JsonKey(name: 'on_trigger') final OnTrigger? onTrigger,
       @JsonKey(name: 'next_run_at') final String? nextRunAt,
       @JsonKey(name: 'last_run_at') final String? lastRunAt,
       @JsonKey(name: 'last_run_ok') final bool? lastRunOk,
@@ -514,8 +559,10 @@ abstract class _ProjectMeta implements ProjectMeta {
   @override
   bool get archived;
   @override
+  @JsonKey(name: 'requires_references')
   bool get requiresReferences;
   @override
+  @JsonKey(name: 'task_type')
   String get taskType;
   @override
   List<String>? get tags;
@@ -530,6 +577,9 @@ abstract class _ProjectMeta implements ProjectMeta {
   String? get handedOffAt;
   @override
   Schedule? get schedule;
+  @override
+  @JsonKey(name: 'on_trigger')
+  OnTrigger? get onTrigger;
   @override
   @JsonKey(name: 'next_run_at')
   String? get nextRunAt;

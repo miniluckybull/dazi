@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'providers/auth_provider.dart';
+import 'screens/approval_detail_screen.dart';
 import 'screens/approvals_screen.dart';
 import 'screens/memory_screen.dart';
 import 'screens/pair_screen.dart';
@@ -61,6 +62,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/approvals',
                 builder: (context, state) => const ApprovalsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':slug/:id',
+                    builder: (context, state) => ApprovalDetailById(
+                      slug: state.pathParameters['slug']!,
+                      id: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
