@@ -1,0 +1,22 @@
+{
+  "name": "@dazi/ts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "dazi 团队协作层：dsh 插件与 TypeScript 服务（迁移中，见 PROGRESS.md）",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test packages/*/test/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "22.14.0",
+    "typescript": "5.8.3"
+  }
+}

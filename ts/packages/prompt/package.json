@@ -1,0 +1,17 @@
+{
+  "name": "@dazi/prompt",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "上下文拼装 = 交接包；handoff / plan / autopilot 四种 prompt",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@dazi/memory": "*",
+    "@dazi/workspace": "*"
+  }
+}

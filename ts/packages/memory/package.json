@@ -1,0 +1,16 @@
+{
+  "name": "@dazi/memory",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "分层记忆：全局 ~/.dazi/*.md 与项目 .dazi/{journal,context}.md",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@dazi/workspace": "*"
+  }
+}
