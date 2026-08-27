@@ -88,7 +88,7 @@ pub async fn resolve_approval(
 ) -> ApiResult<Approval> {
     let approval = state
         .approvals
-        .resolve(&id, req.approved)
+        .resolve(&id, &slug, req.approved)
         .ok_or_else(|| err(StatusCode::CONFLICT, "审批不存在或已处理"))?;
 
     if !req.approved {

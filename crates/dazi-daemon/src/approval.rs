@@ -139,12 +139,13 @@ impl ApprovalStore {
         v
     }
 
-    /// 决策一条审批。仅当当前为 Pending 才允许，返回更新后的审批。
-    /// 返回 None 表示 id 不存在或已决策过（防重复执行）。
-    pub fn resolve(&self, id: &str, approved: bool) -> Option<Approval> {
+    /// 决策一条审批。仅当当前为 Pending 且 slug 与登记时一致才允许，返回更新后的审批。
+    /// 返回 None 表示 id 不存在、不属于该项目，或已决策过（防重复执行与跨项目越权）。
+    /// slug 校验在锁内完成，避免调用方先查后改的竞态。
+    pub fn resolve(&self, id: &str, slug: &str, approved: bool) -> Option<Approval> {
         let mut items = self.items.lock().unwrap();
         let a = items.get_mut(id)?;
-        if a.status != ApprovalStatus::Pending {
+        if a.slug != slug || a.status != ApprovalStatus::Pending {
             return None;
         }
         a.status = if approved {
@@ -170,23 +171,36 @@ mod tests {
         assert_eq!(store.list_pending().len(), 1);
 
         // 批准后从待批列表消失
-        let resolved = store.resolve(&a.id, true).expect("应能决策");
+        let resolved = store.resolve(&a.id, "proj-x", true).expect("应能决策");
         assert_eq!(resolved.status, ApprovalStatus::Approved);
         assert_eq!(store.list_pending().len(), 0);
 
         // 重复决策被拒（防重复执行）
-        assert!(store.resolve(&a.id, true).is_none());
+        assert!(store.resolve(&a.id, "proj-x", true).is_none());
         // 不存在的 id
-        assert!(store.resolve("nope", false).is_none());
+        assert!(store.resolve("nope", "proj-x", false).is_none());
     }
 
     #[test]
     fn reject_keeps_record_but_not_pending() {
         let store = ApprovalStore::ephemeral();
         let a = store.create("p", "P", "plan", None);
-        let r = store.resolve(&a.id, false).unwrap();
+        let r = store.resolve(&a.id, "p", false).unwrap();
         assert_eq!(r.status, ApprovalStatus::Rejected);
         assert_eq!(store.list_pending().len(), 0);
+    }
+
+    /// 跨项目越权：拿 A 项目的审批 id 去 B 项目的路径上决策必须失败，
+    /// 且该审批要保持 Pending（不能被顺带改坏）。
+    #[test]
+    fn resolve_rejects_slug_mismatch() {
+        let store = ApprovalStore::ephemeral();
+        let a = store.create("proj-a", "A", "plan", None);
+
+        assert!(store.resolve(&a.id, "proj-b", true).is_none());
+        assert_eq!(store.list_pending().len(), 1);
+        // 仍可由正确的项目决策
+        assert!(store.resolve(&a.id, "proj-a", true).is_some());
     }
 }
 
