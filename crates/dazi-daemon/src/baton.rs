@@ -297,6 +297,71 @@ pub fn release(
     .map_err(BatonError::Io)
 }
 
+/// 注入 prompt 的接力链最大条数。链会一直增长，prompt 不能无限长。
+pub const RELAY_TAIL_ENTRIES: usize = 20;
+
+fn action_label(a: RelayAction) -> &'static str {
+    match a {
+        RelayAction::Claim => "接手",
+        RelayAction::Handoff => "递交",
+        RelayAction::Release => "放下",
+        RelayAction::Expire => "超时释放",
+    }
+}
+
+/// 构造接力链 section；链为空回 None（单人任务不该在 prompt 里多一段废话）。
+///
+/// 刻意不改 `dazi_core::prompt::build_*`：那些函数的输出有与 TS 逐字节比对的
+/// golden，是 S2 的验收闸门，往里塞 section 等于把回退保障拆了。
+///
+/// `name_of` 把 member_id 映射为人名，查不到则退回 id——宁可难看也不能丢信息。
+pub fn build_relay_section(
+    project: &Path,
+    name_of: &dyn Fn(&str) -> Option<String>,
+    limit: usize,
+) -> Option<String> {
+    let chain = read_chain(project, Some(limit));
+    if chain.is_empty() {
+        return None;
+    }
+    let who = |id: &Option<String>| match id {
+        None => "无人".to_string(),
+        Some(i) => name_of(i).unwrap_or_else(|| i.clone()),
+    };
+    let mut lines = String::new();
+    for e in &chain {
+        let body = match e.action {
+            RelayAction::Handoff => format!("：{} → {}", who(&e.from), who(&e.to)),
+            RelayAction::Claim => format!("：{}", who(&e.to)),
+            _ => format!("：{}", who(&e.from)),
+        };
+        lines.push_str(&format!("- {} {}{}\n", e.at, action_label(e.action), body));
+        if let Some(n) = &e.note {
+            lines.push_str(&format!("  说明：{n}\n"));
+        }
+    }
+    Some(format!(
+        "## 本任务接力历史（来自 .dazi/relay.jsonl，最近 {} 条）\n\
+         这根棒之前经过下列人手。交接说明里可能有上一位留下的关键判断，不要重复他们已经做过的工作：\n{}",
+        chain.len(),
+        lines.trim_end()
+    ))
+}
+
+/// 把接力段并入既有 prompt，插在最后一个 `## 任务` 之前。
+///
+/// 模型对结尾指令最敏感，故任务指令必须保持在末尾，接力历史放它前面。
+pub fn with_relay_section(prompt: &str, section: Option<String>) -> String {
+    let Some(sec) = section else {
+        return prompt.to_string();
+    };
+    const MARKER: &str = "\n\n## 任务";
+    match prompt.rfind(MARKER) {
+        None => format!("{prompt}\n\n{sec}"),
+        Some(at) => format!("{}\n\n{}{}", &prompt[..at], sec, &prompt[at..]),
+    }
+}
+
 /// 读接力链。坏行跳过——一行写坏不该让整段历史读不出来。
 pub fn read_chain(project: &Path, limit: Option<usize>) -> Vec<RelayEntry> {
     let Ok(raw) = std::fs::read_to_string(relay_path(project)) else {
@@ -476,6 +541,62 @@ mod tests {
         let line = std::fs::read_to_string(relay_path(&d)).unwrap();
         assert!(line.ends_with('\n'));
         assert!(!line.trim_end().contains('\n'), "一条记录必须是单行");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// 无接力历史时 prompt 必须一字不改——否则单人任务的 prompt 被无谓污染，
+    /// 且与 dazi-core 的冻结 golden 对不上。
+    #[test]
+    fn no_chain_leaves_prompt_untouched() {
+        let d = tmp();
+        let original = "## 项目\n根目录：/x\n\n## 任务\n请总结";
+        let sec = build_relay_section(&d, &|_| None, 20);
+        assert!(sec.is_none());
+        assert_eq!(with_relay_section(original, sec), original);
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// 接力段插在「## 任务」之前，任务指令仍须在末尾（模型对结尾指令最敏感）。
+    #[test]
+    fn relay_section_goes_before_task() {
+        let d = tmp();
+        claim(&d, "m-alice", HolderKind::Human, None, t0()).unwrap();
+        handoff(
+            &d,
+            "m-alice",
+            "m-bob",
+            HolderKind::Human,
+            Some("资料已收齐".into()),
+            t0(),
+        )
+        .unwrap();
+
+        let names = |id: &str| match id {
+            "m-alice" => Some("爱丽丝".to_string()),
+            _ => None,
+        };
+        let sec = build_relay_section(&d, &names, 20).expect("应有接力段");
+        assert!(sec.contains("爱丽丝"));
+        assert!(sec.contains("m-bob"), "查不到人名要退回 id，不能丢信息");
+        assert!(sec.contains("资料已收齐"));
+
+        let merged = with_relay_section("## 项目\n根目录：/x\n\n## 任务\n请总结", Some(sec));
+        let relay_at = merged.find("## 本任务接力历史").unwrap();
+        let task_at = merged.find("## 任务").unwrap();
+        assert!(task_at > relay_at, "接力段必须在任务指令之前");
+        assert!(merged.trim_end().ends_with("请总结"), "任务指令仍须结尾");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// 没有「## 任务」标记时追加到末尾，不能丢内容。
+    #[test]
+    fn appends_when_no_task_marker() {
+        let d = tmp();
+        claim(&d, "m-alice", HolderKind::Human, None, t0()).unwrap();
+        let sec = build_relay_section(&d, &|_| None, 20);
+        let merged = with_relay_section("## 项目\n根目录：/x", sec);
+        assert!(merged.starts_with("## 项目"));
+        assert!(merged.contains("## 本任务接力历史"));
         std::fs::remove_dir_all(&d).ok();
     }
 

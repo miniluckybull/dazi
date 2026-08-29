@@ -23,6 +23,29 @@ fn model_of(path: &std::path::Path) -> Option<String> {
         .and_then(|t| t.model)
 }
 
+/// member_id → 人名。给接力段用：prompt 里出现 "m-3f2a" 对模型和人都是噪音。
+fn member_name_resolver() -> impl Fn(&str) -> Option<String> {
+    let members = crate::team::load().members;
+    move |id: &str| {
+        members
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.name.clone())
+    }
+}
+
+/// 给 prompt 追加接力历史。棒的历史是交接包里最不可替代的一段：
+/// 没有它，接棒的 agent 会重做上一位已经做过的工作。
+fn with_relay(project: &std::path::Path, prompt: String) -> String {
+    let resolve = member_name_resolver();
+    let section = crate::baton::build_relay_section(
+        project,
+        &resolve,
+        crate::baton::RELAY_TAIL_ENTRIES,
+    );
+    crate::baton::with_relay_section(&prompt, section)
+}
+
 /// usage 落盘（usage::append_usage）以项目目录名作为 project_slug，预估查询保持同一口径。
 fn usage_slug_of(path: &std::path::Path) -> String {
     path.file_name()
@@ -45,7 +68,7 @@ pub fn request_plan(
         .map(|m| m.name)
         .unwrap_or_else(|_| slug.to_string());
     let model = model_of(&path);
-    let plan_prompt = prompt::build_plan_prompt(&path);
+    let plan_prompt = with_relay(&path, prompt::build_plan_prompt(&path));
 
     let outcome = autopilot::run_plan(&path, &plan_prompt, model.as_deref())?;
 
@@ -123,7 +146,7 @@ pub async fn resolve_approval(
     let path = find_project_path(&slug)?;
     let name = approval.name.clone();
     let model = model_of(&path);
-    let exec_prompt = prompt::build_autopilot_prompt(&path);
+    let exec_prompt = with_relay(&path, prompt::build_autopilot_prompt(&path));
     let exec_path = path.clone();
 
     let outcome = tokio::task::spawn_blocking(move || {
