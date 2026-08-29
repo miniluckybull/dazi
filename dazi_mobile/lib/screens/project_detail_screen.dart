@@ -7,7 +7,9 @@ import '../api/dazi_api.dart';
 import '../providers/project_content_provider.dart';
 import '../providers/project_meta_provider.dart';
 import '../utils/time.dart';
+import '../widgets/baton_card.dart';
 import '../widgets/readme_editor.dart';
+import '../widgets/relay_chain_view.dart';
 import '../widgets/terminal_view.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
@@ -23,8 +25,8 @@ class ProjectDetailScreen extends ConsumerWidget {
     final metaAsync = ref.watch(projectMetaProvider(slug));
 
     return DefaultTabController(
-      length: 5,
-      initialIndex: initialTab == 'runs' ? 4 : 0,
+      length: 6,
+      initialIndex: initialTab == 'runs' ? 4 : (initialTab == 'relay' ? 5 : 0),
       child: Scaffold(
         appBar: AppBar(
           title: metaAsync.when(
@@ -46,16 +48,27 @@ class ProjectDetailScreen extends ConsumerWidget {
               Tab(text: '日志'),
               Tab(text: '上下文'),
               Tab(text: '运行'),
+              Tab(text: '接力'),
             ],
           ),
         ),
-        body: TabBarView(
+        // 棒卡片放在 TabBarView 之外：不管在看哪个 Tab，
+        // 「现在谁在推进」都必须一眼可见。
+        body: Column(
           children: [
-            _ReadmeTab(slug: slug),
-            DaziTerminalView(slug: slug),
-            _JournalTab(slug: slug),
-            _ContextTab(slug: slug),
-            _RunsTab(slug: slug),
+            BatonCard(slug: slug),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _ReadmeTab(slug: slug),
+                  DaziTerminalView(slug: slug),
+                  _JournalTab(slug: slug),
+                  _ContextTab(slug: slug),
+                  _RunsTab(slug: slug),
+                  RelayChainView(slug: slug),
+                ],
+              ),
+            ),
           ],
         ),
       ),

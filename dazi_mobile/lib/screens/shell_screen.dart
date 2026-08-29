@@ -27,6 +27,7 @@ class _ShellScreenState extends State<ShellScreen> {
         selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: widget.navigationShell.goBranch,
         destinations: const [
+          NavigationDestination(icon: Icon(Icons.inbox_outlined), label: '待我处理'),
           NavigationDestination(icon: Icon(Icons.folder_outlined), label: '项目'),
           NavigationDestination(icon: Icon(Icons.check_circle_outline), label: '审批'),
           NavigationDestination(icon: Icon(Icons.memory_outlined), label: '记忆'),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'providers/auth_provider.dart';
 import 'screens/approval_detail_screen.dart';
 import 'screens/approvals_screen.dart';
+import 'screens/inbox_screen.dart';
 import 'screens/memory_screen.dart';
 import 'screens/new_project_screen.dart';
 import 'screens/pair_screen.dart';
@@ -17,12 +18,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
 
   return GoRouter(
-    initialLocation: '/projects',
+    // 手机端落地在「待我处理」：手机的用途是推进别人递过来的活，
+    // 而不是浏览全部任务（那是桌面端的事）。
+    initialLocation: '/inbox',
     redirect: (context, state) {
       if (auth.isLoading) return null;
       final isPairRoute = state.matchedLocation == '/pair';
       if (!auth.isPaired && !isPairRoute) return '/pair';
-      if (auth.isPaired && isPairRoute) return '/projects';
+      if (auth.isPaired && isPairRoute) return '/inbox';
       return null;
     },
     routes: [
@@ -35,6 +38,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           navigationShell: navigationShell,
         ),
         branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/inbox',
+                builder: (context, state) => const InboxScreen(),
+              ),
+            ],
+          ),
           StatefulShellBranch(
             routes: [
               GoRoute(

@@ -132,6 +132,74 @@ class DaziApi {
     await _dio.delete(ApiPaths.terminalPath(slug));
   }
 
+  Future<BatonState> getBaton(String slug) async {
+    final response = await _dio.get(ApiPaths.batonPath(slug));
+    return BatonState.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 认领棒。持棒人恒为当前设备所属成员，服务端不接受代认领。
+  /// 他人持棒且未过期时服务端回 409。
+  Future<Baton> claimBaton(String slug, {String? note}) async {
+    final response = await _dio.post(
+      ApiPaths.batonPath(slug),
+      data: {if (note != null) 'note': note},
+    );
+    return Baton.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 递棒。kind 省略即 human；递给已停用成员服务端回 400。
+  Future<Baton> handoffBaton(
+    String slug, {
+    required String to,
+    String? kind,
+    String? note,
+  }) async {
+    final response = await _dio.post(
+      ApiPaths.batonHandoffPath(slug),
+      data: {
+        'to': to,
+        if (kind != null) 'kind': kind,
+        if (note != null) 'note': note,
+      },
+    );
+    return Baton.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 放棒。force 为管理员强收他人的棒，需 manage_members 权限。
+  Future<void> releaseBaton(String slug, {String? note, bool force = false}) async {
+    await _dio.delete(
+      ApiPaths.batonPath(slug),
+      data: {if (note != null) 'note': note, 'force': force},
+    );
+  }
+
+  Future<List<RelayEntry>> getRelayChain(String slug, {int? limit}) async {
+    final response = await _dio.get(
+      ApiPaths.relayPath(slug),
+      queryParameters: {if (limit != null) 'limit': limit},
+    );
+    final list = response.data as List<dynamic>;
+    return list.map((e) => RelayEntry.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Inbox> getInbox() async {
+    final response = await _dio.get(ApiPaths.inbox);
+    return Inbox.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// 成员列表。递棒时要选人，故手机也需要它。
+  Future<List<Member>> getMembers() async {
+    final response = await _dio.get(ApiPaths.members);
+    final list = (response.data as Map<String, dynamic>)['members'] as List<dynamic>;
+    return list.map((e) => Member.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// 当前身份。界面据此决定显示哪些操作（例如 viewer 不显示「接手」）。
+  Future<Me> getMe() async {
+    final response = await _dio.get(ApiPaths.me);
+    return Me.fromJson(response.data as Map<String, dynamic>);
+  }
+
   /// 服务端文本端点统一返回 {"content": "..."}。
   String _contentOf(dynamic data) =>
       (data as Map<String, dynamic>)['content'] as String;

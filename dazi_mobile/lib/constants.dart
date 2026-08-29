@@ -27,6 +27,12 @@ class ApiPaths {
   static const approvals = '/api/v1/approvals';
   static const plan = '/api/v1/projects/{slug}/plan';
   static const resolveApproval = '/api/v1/projects/{slug}/approvals/{id}';
+  static const baton = '/api/v1/projects/{slug}/baton';
+  static const batonHandoff = '/api/v1/projects/{slug}/baton/handoff';
+  static const relay = '/api/v1/projects/{slug}/relay';
+  static const inbox = '/api/v1/inbox';
+  static const members = '/api/v1/members';
+  static const me = '/api/v1/me';
 
   static String projectPath(String slug) => project.replaceFirst('{slug}', Uri.encodeComponent(slug));
   static String readmePath(String slug) => readme.replaceFirst('{slug}', Uri.encodeComponent(slug));
@@ -36,6 +42,10 @@ class ApiPaths {
   static String terminalPath(String slug) => terminal.replaceFirst('{slug}', Uri.encodeComponent(slug));
   static String memoryPath(String name) => memory.replaceFirst('{name}', Uri.encodeComponent(name));
   static String planPath(String slug) => plan.replaceFirst('{slug}', Uri.encodeComponent(slug));
+  static String batonPath(String slug) => baton.replaceFirst('{slug}', Uri.encodeComponent(slug));
+  static String batonHandoffPath(String slug) =>
+      batonHandoff.replaceFirst('{slug}', Uri.encodeComponent(slug));
+  static String relayPath(String slug) => relay.replaceFirst('{slug}', Uri.encodeComponent(slug));
   static String resolveApprovalPath(String slug, String id) => resolveApproval
       .replaceFirst('{slug}', Uri.encodeComponent(slug))
       .replaceFirst('{id}', Uri.encodeComponent(id));

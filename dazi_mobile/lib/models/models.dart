@@ -1,6 +1,8 @@
 export 'approval.dart';
+export 'baton.dart';
 export 'dazi_event.dart';
 export 'health.dart';
+export 'member.dart';
 export 'pairing_result.dart';
 export 'project_meta.dart';
 export 'project_summary.dart';
