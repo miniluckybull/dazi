@@ -72,6 +72,11 @@ pub fn request_plan(
 
     let outcome = autopilot::run_plan(&path, &plan_prompt, model.as_deref())?;
 
+    // 产计划本身就烧 token，必须记账。daemon 此前一次都不调 append_usage，
+    // 于是纯服务器部署（无桌面）的 estimate_run_cost 永远读到空历史、永远返回
+    // None——预估功能是被自己饿死的，不是没实现。
+    let _ = usage::append_usage(&path, model.as_deref(), outcome.usage.as_ref());
+
     // 基于历史 usage 预估本次执行花费；无任何历史时为 None。
     let estimate = usage::estimate_run_cost(&usage_slug_of(&path));
     let approval = state
@@ -148,6 +153,8 @@ pub async fn resolve_approval(
     let model = model_of(&path);
     let exec_prompt = with_relay(&path, prompt::build_autopilot_prompt(&path));
     let exec_path = path.clone();
+    // model 要在 move 进闭包前留一份给后面记账用。
+    let usage_model = model.clone();
 
     let outcome = tokio::task::spawn_blocking(move || {
         autopilot::run_autopilot(&exec_path, &exec_prompt, model.as_deref())
@@ -157,6 +164,9 @@ pub async fn resolve_approval(
     .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     let _ = autopilot::append_autopilot_journal(&path, &outcome);
+    // 真实执行的用量也要落盘，否则下一次预估仍只看得到 plan 阶段的消耗，
+    // 系统性低估执行成本。
+    let _ = usage::append_usage(&path, usage_model.as_deref(), outcome.usage.as_ref());
     let msg = match &outcome.session_id {
         Some(sid) => format!("{}\n[session: {sid}]", outcome.summary),
         None => outcome.summary.clone(),

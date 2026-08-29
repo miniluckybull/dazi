@@ -214,14 +214,33 @@ pub fn run_autopilot(
     Ok(outcome)
 }
 
-/// plan 模式跑 claude：只产出计划、不执行任何写操作或命令（由 claude CLI 强制保证）。
+/// plan 模式跑 claude：只产出计划、不执行任何写操作或命令（由后端 CLI 强制保证）。
 /// 用于手机审批的 dry-run 阶段——把计划推给用户批准后，再 run_autopilot 真正执行。
+///
+/// 后端不支持 `--permission-mode` 时**拒绝执行**，而不是降级。
+/// 降级的后果不是「少一层保护」而是反的：调用方与用户都以为这是只读预演，
+/// 实际却是一次带写权限的真实运行——人批准的是一件已经做完的事。
+/// `supports_permission_mode` 此前声明了却从未被查询，正是这个漏洞。
 pub fn run_plan(
     project_path: &Path,
     prompt: &str,
     model: Option<&str>,
 ) -> Result<RunOutcome, String> {
+    let cfg = crate::config::load().unwrap_or_default();
+    let backend = crate::backend::global().current(cfg.backend.as_deref());
+    check_plan_mode_supported(backend.name(), backend.supports_permission_mode())?;
     run_claude(project_path, prompt, model, "plan")
+}
+
+/// plan 模式的前置校验，单独拆出以便测试（不依赖全局配置与真实后端）。
+fn check_plan_mode_supported(name: &str, supported: bool) -> Result<(), String> {
+    if supported {
+        return Ok(());
+    }
+    Err(format!(
+        "后端 {name} 不支持 --permission-mode，无法保证「只出计划不动手」。\
+         请切换到支持该参数的后端（如 claude）再用「先出计划」。"
+    ))
 }
 
 /// headless 运行后端 CLI 的核心实现。工作目录设为项目根，bin 由 backend trait 解析，
@@ -339,6 +358,16 @@ pub fn append_autopilot_journal(project_path: &Path, outcome: &RunOutcome) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// plan 模式必须是「不支持就拒绝」而非「不支持就照跑」。
+    /// 后者会让一次带写权限的真实运行被当成只读预演推给用户审批。
+    #[test]
+    fn plan_mode_refuses_unsupported_backend() {
+        assert!(check_plan_mode_supported("claude", true).is_ok());
+        let err = check_plan_mode_supported("kimi", false).unwrap_err();
+        assert!(err.contains("kimi"), "错误信息要指名后端，否则用户不知道换什么");
+        assert!(err.contains("--permission-mode"));
+    }
 
     #[test]
     fn tail_summary_keeps_short_and_tails_long() {

@@ -94,7 +94,7 @@ impl CliBackend for KimiBackend {
                 ok: false,
                 summary: format!(
                     "kimi 输出无法按 claude JSON 解析（格式待确认）\nstdout: {}\nstderr: {}",
-                    &stdout[..stdout.len().min(200)],
+                    super::head_chars(stdout, 200),
                     stderr
                 ),
                 session_id: None,

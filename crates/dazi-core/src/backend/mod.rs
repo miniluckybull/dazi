@@ -6,7 +6,10 @@
 //! 设计要点：
 //! - `resolve_bin` 探测可执行路径，复用 autopilot::resolve_claude_bin 的探测策略，
 //!   各后端实现各自的路径列表。
-//! - `build_headless_cmd` 产出 `(args, env, cwd)` 三元组，让调用方决定走 pty 还是 Command。
+//! - `build_headless_cmd` 产出 `(bin, args, cwd)`，让调用方决定走 pty 还是 Command。
+//!   **注意：不含 env。** 子进程继承 daemon 自身的环境，故「每成员自带 API key」
+//!   在本 Rust 路径上做不到——该能力随执行层迁到 TS 侧（`ctx.subprocess` 支持
+//!   逐次调用注入 env）时提供，不在此处补一个当前无人消费的字段。
 //! - `parse_outcome` 把后端特定的 stdout 解析为统一 `BackendRunOutcome`，
 //!   autopilot::run_autopilot 走这个统一结果。
 
@@ -136,6 +139,18 @@ pub fn global() -> &'static BackendRegistry {
 // 把 RunOutcome re-export 到 backend 命名空间，方便各 backend 实现引用。
 pub use crate::autopilot::RunOutcome;
 
+/// 截取诊断片段的前 n 个**字符**（不是字节）。
+///
+/// 原先各处写 `&stdout[..stdout.len().min(200)]`，切点落在多字节字符中间会
+/// panic。dazi 的任务内容与模型输出基本都是中文，一旦后端报错（正是要看这段
+/// 诊断信息的时候）就必然踩中，把一条可读的错误变成崩溃。
+pub fn head_chars(s: &str, n: usize) -> &str {
+    match s.char_indices().nth(n) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    }
+}
+
 /// 解析 outcome 的便捷 trait 扩展：让 backend 自选实现，默认 claude 风格 JSON。
 /// 多数后端要 override parse_outcome；kimi/zcode 在实现内做对应解析。
 pub fn default_parse_claude_json(stdout: &str) -> Result<RunOutcome, String> {
@@ -158,7 +173,7 @@ pub fn default_parse_claude_json(stdout: &str) -> Result<RunOutcome, String> {
             found = Some(v);
         }
     }
-    let v = found.ok_or_else(|| format!("无法解析 CLI 输出: {}", &stdout[..stdout.len().min(200)]))?;
+    let v = found.ok_or_else(|| format!("无法解析 CLI 输出: {}", head_chars(stdout, 200)))?;
     let is_error = v
         .get("is_error")
         .and_then(|b| b.as_bool())
@@ -187,4 +202,34 @@ pub fn default_parse_claude_json(stdout: &str) -> Result<RunOutcome, String> {
         usage,
         artifacts: Vec::new(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 回归：`&s[..200]` 在中文上必 panic（一个汉字 3 字节，200 不是 3 的倍数）。
+    /// dazi 的诊断片段几乎总是中文，故这条是真实崩溃路径而非理论边界。
+    #[test]
+    fn head_chars_does_not_split_multibyte() {
+        let s = "任务执行失败".repeat(100);
+        assert!(!s.is_char_boundary(200), "前提：200 字节处不是字符边界");
+        let head = head_chars(&s, 200);
+        assert_eq!(head.chars().count(), 200);
+        assert!(s.starts_with(head));
+    }
+
+    #[test]
+    fn head_chars_returns_whole_string_when_shorter() {
+        assert_eq!(head_chars("短", 200), "短");
+        assert_eq!(head_chars("", 10), "");
+    }
+
+    /// 解析失败时的错误串必须能真正构造出来，而不是在格式化时崩掉。
+    #[test]
+    fn unparsable_chinese_output_yields_error_not_panic() {
+        let junk = "模型返回了一段无法解析的中文说明".repeat(50);
+        let err = default_parse_claude_json(&junk).unwrap_err();
+        assert!(err.starts_with("无法解析 CLI 输出: "));
+    }
 }
