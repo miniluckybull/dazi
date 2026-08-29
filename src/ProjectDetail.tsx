@@ -19,6 +19,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { ProjectSummary, TaskType, useApp } from "./store";
+import { AssignPanel } from "./AssignPanel";
 import { BatonPanel } from "./BatonPanel";
 import { ScheduleConfigModal } from "./ScheduleEditor";
 import { SkillPickerModal } from "./SkillPicker";
@@ -691,11 +692,12 @@ export function ProjectDetail({
         </div>
         {!project.archived && <AgentModeToggle />}
       </div>
-      {/* 棒放在 Tab 之外：不管在看哪个 Tab，「现在谁在推进」都必须一眼可见。
-          归档任务不再需要推进，故不显示。 */}
+      {/* 棒与负责人放在 Tab 之外：不管在看哪个 Tab，「现在谁在推进」
+          「这活归谁」都必须一眼可见。归档任务不再需要推进，故不显示。 */}
       {!project.archived && (
-        <div className="shrink-0 px-4 pt-2">
+        <div className="shrink-0 space-y-2 px-4 pt-2">
           <BatonPanel key={project.slug} projectPath={project.path} />
+          <AssignPanel key={`${project.slug}-assign`} projectPath={project.path} />
         </div>
       )}
       <div className="flex flex-1 overflow-hidden">

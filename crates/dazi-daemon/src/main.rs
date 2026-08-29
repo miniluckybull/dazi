@@ -4,6 +4,7 @@ mod approval;
 mod auth;
 mod http;
 mod http_approval;
+mod http_assign;
 mod http_baton;
 mod http_team;
 mod http_write;
@@ -120,6 +121,16 @@ async fn main() {
         )
         .route("/api/v1/projects/:slug/relay", get(http_baton::get_relay_chain))
         .route("/api/v1/inbox", get(http_baton::get_inbox))
+        // 指派与评论：责任归属（≠ 棒）+ @提及派活。
+        .route(
+            "/api/v1/projects/:slug/assignee",
+            get(http_assign::get_assignment).put(http_assign::set_assignment),
+        )
+        .route(
+            "/api/v1/projects/:slug/comments",
+            get(http_assign::list_comments).post(http_assign::add_comment),
+        )
+        .route("/api/v1/assigned", get(http_assign::get_assigned_to_me))
         .route(
             "/api/v1/projects/:slug/approvals/:id",
             post(http_approval::resolve_approval),

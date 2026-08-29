@@ -187,6 +187,52 @@ class DaziApi {
     return Inbox.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// 读指派。未指派时 assignment 为 null。
+  Future<Assignment?> getAssignment(String slug) async {
+    final response = await _dio.get(ApiPaths.assigneePath(slug));
+    return AssignmentResp.fromJson(response.data as Map<String, dynamic>)
+        .assignment;
+  }
+
+  /// 指派任务。`assignee` 传 null 表示取消指派。
+  /// 指派给已停用成员服务端回 400。
+  Future<Assignment?> setAssignment(String slug, {String? assignee}) async {
+    final response = await _dio.put(
+      ApiPaths.assigneePath(slug),
+      data: {'assignee': assignee},
+    );
+    return AssignmentResp.fromJson(response.data as Map<String, dynamic>)
+        .assignment;
+  }
+
+  /// 「指派给我的」。与 inbox 是两个问题：inbox 答「现在轮到我动手吗」，
+  /// 这里答「哪些活归我负责」。
+  Future<List<AssignedItem>> getAssignedToMe() async {
+    final response = await _dio.get(ApiPaths.assigned);
+    final list = response.data as List<dynamic>;
+    return list
+        .map((e) => AssignedItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<Comment>> getComments(String slug, {int? limit}) async {
+    final response = await _dio.get(
+      ApiPaths.commentsPath(slug),
+      queryParameters: {if (limit != null) 'limit': limit},
+    );
+    final list = response.data as List<dynamic>;
+    return list.map((e) => Comment.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// 发评论。@提及由服务端解析，客户端不预处理文本。
+  Future<Comment> addComment(String slug, String text) async {
+    final response = await _dio.post(
+      ApiPaths.commentsPath(slug),
+      data: {'text': text},
+    );
+    return Comment.fromJson(response.data as Map<String, dynamic>);
+  }
+
   /// 成员列表。递棒时要选人，故手机也需要它。
   Future<List<Member>> getMembers() async {
     final response = await _dio.get(ApiPaths.members);

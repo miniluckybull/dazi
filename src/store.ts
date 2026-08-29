@@ -149,6 +149,28 @@ export interface RelayEntry {
   by: string;
 }
 
+/**
+ * 任务指派。与接力棒是两件事：
+ * 棒是「现在谁在动手」（抢占、有 TTL、空着是常态），
+ * 指派是「这活归谁负责」（不过期，通常几天不变）。
+ */
+export interface Assignment {
+  assignee: string;
+  at: string;
+  by: string;
+}
+
+/**
+ * 一条评论。mentions 由 Rust 侧 parse_mentions 解析，前端不自己匹配 @：
+ * 中文名无词边界，两端各写一套规则必然漂移。
+ */
+export interface Comment {
+  at: string;
+  by: string;
+  text: string;
+  mentions: string[];
+}
+
 interface AppState {
   config: AppConfig | null;
   projects: ProjectSummary[];
@@ -252,6 +274,11 @@ interface AppState {
   claimBaton: (projectPath: string, note?: string) => Promise<Baton>;
   handoffBaton: (projectPath: string, to: string, note?: string) => Promise<Baton>;
   releaseBaton: (projectPath: string, note?: string, force?: boolean) => Promise<void>;
+  /** 指派与评论：同棒，直读文件系统 */
+  readAssignment: (projectPath: string) => Promise<Assignment | null>;
+  setAssignment: (projectPath: string, assignee: string | null) => Promise<Assignment | null>;
+  readComments: (projectPath: string) => Promise<Comment[]>;
+  addComment: (projectPath: string, text: string) => Promise<Comment>;
 }
 
 export interface DaemonConfig {
@@ -706,4 +733,14 @@ export const useApp = create<AppState>((set, get) => ({
 
   releaseBaton: (projectPath, note, force = false) =>
     invoke("release_baton", { projectPath, note: note ?? null, force }),
+
+  readAssignment: (projectPath) =>
+    invoke<Assignment | null>("read_assignment", { projectPath }),
+
+  setAssignment: (projectPath, assignee) =>
+    invoke<Assignment | null>("set_assignment", { projectPath, assignee }),
+
+  readComments: (projectPath) => invoke<Comment[]>("read_comments", { projectPath }),
+
+  addComment: (projectPath, text) => invoke<Comment>("add_comment", { projectPath, text }),
 }));

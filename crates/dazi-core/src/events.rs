@@ -38,6 +38,28 @@ pub enum DaziEvent {
         approval_id: String,
         approved: bool,
     },
+    /// 任务被指派给某人。`assignee` 为 None 表示取消指派。
+    /// 客户端据此把任务收进/移出「指派给我的」。
+    TaskAssigned {
+        slug: String,
+        name: String,
+        assignee: Option<String>,
+        /// 指派者 member_id。自我认领时与 assignee 相同。
+        by: String,
+    },
+    /// 有人评论，且 @提及了成员。
+    ///
+    /// 只在 `mentions` 非空时推送：无提及的评论不该给全队弹通知，
+    /// 那会让通知很快变成噪音、进而被整体忽略。
+    Mentioned {
+        slug: String,
+        name: String,
+        /// 被提及的 member_id 列表。客户端只在自己在列表里时提示。
+        mentions: Vec<String>,
+        by: String,
+        /// 评论摘要（截断），够用户判断要不要点进去。
+        text: String,
+    },
 }
 
 /// 事件投递出口。实现者负责把事件送达各自的客户端。

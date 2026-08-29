@@ -37,6 +37,24 @@ class DaziEvent with _$DaziEvent {
     required bool approved,
   }) = ApprovalResolved;
 
+  /// 任务被指派/取消指派。`assignee` 为 null 表示取消。
+  const factory DaziEvent.taskAssigned({
+    required String slug,
+    required String name,
+    String? assignee,
+    required String by,
+  }) = TaskAssigned;
+
+  /// 有人评论并 @ 了成员。服务端只在 mentions 非空时推送，
+  /// 客户端再判断自己是否在 mentions 里——不在就不该打扰。
+  const factory DaziEvent.mentioned({
+    required String slug,
+    required String name,
+    @Default(<String>[]) List<String> mentions,
+    required String by,
+    required String text,
+  }) = Mentioned;
+
   factory DaziEvent.fromJson(Map<String, dynamic> json) =>
       _$DaziEventFromJson(json);
 }

@@ -7,7 +7,9 @@ import '../api/dazi_api.dart';
 import '../providers/project_content_provider.dart';
 import '../providers/project_meta_provider.dart';
 import '../utils/time.dart';
+import '../widgets/assignee_row.dart';
 import '../widgets/baton_card.dart';
+import '../widgets/comments_view.dart';
 import '../widgets/readme_editor.dart';
 import '../widgets/relay_chain_view.dart';
 import '../widgets/terminal_view.dart';
@@ -25,8 +27,14 @@ class ProjectDetailScreen extends ConsumerWidget {
     final metaAsync = ref.watch(projectMetaProvider(slug));
 
     return DefaultTabController(
-      length: 6,
-      initialIndex: initialTab == 'runs' ? 4 : (initialTab == 'relay' ? 5 : 0),
+      length: 7,
+      initialIndex: switch (initialTab) {
+        'runs' => 4,
+        'relay' => 5,
+        // @提及的通知点进来要直接落在讨论上，否则用户还得自己找。
+        'comments' => 6,
+        _ => 0,
+      },
       child: Scaffold(
         appBar: AppBar(
           title: metaAsync.when(
@@ -49,14 +57,16 @@ class ProjectDetailScreen extends ConsumerWidget {
               Tab(text: '上下文'),
               Tab(text: '运行'),
               Tab(text: '接力'),
+              Tab(text: '讨论'),
             ],
           ),
         ),
-        // 棒卡片放在 TabBarView 之外：不管在看哪个 Tab，
-        // 「现在谁在推进」都必须一眼可见。
+        // 棒卡片与负责人放在 TabBarView 之外：不管在看哪个 Tab，
+        // 「现在谁在推进」「这活归谁」都必须一眼可见。
         body: Column(
           children: [
             BatonCard(slug: slug),
+            AssigneeRow(slug: slug),
             Expanded(
               child: TabBarView(
                 children: [
@@ -66,6 +76,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                   _ContextTab(slug: slug),
                   _RunsTab(slug: slug),
                   RelayChainView(slug: slug),
+                  CommentsView(slug: slug),
                 ],
               ),
             ),

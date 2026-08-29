@@ -82,8 +82,12 @@ class NotificationService {
       return;
     }
     if (slug != null) {
-      // 任务完成类通知直达项目详情的运行 Tab。
-      final tab = payload['type'] == 'task' ? '?tab=runs' : '';
+      // 任务完成类通知直达运行 Tab；@提及直达讨论 Tab。
+      final tab = switch (payload['type']) {
+        'task' => '?tab=runs',
+        'mention' => '?tab=comments',
+        _ => '',
+      };
       router.push('/projects/${Uri.encodeComponent(slug)}$tab');
     }
   }
@@ -114,6 +118,35 @@ class NotificationService {
         body: '${ok ? '✓' : '✗'} $summary',
         notificationLayout: NotificationLayout.Default,
         payload: {'type': 'task', 'slug': slug, 'run_id': runId},
+      ),
+    );
+  }
+
+  /// 有人 @ 了我。点进去直达讨论 Tab——通知里只有摘要，全文在那儿。
+  /// 调用方须先确认自己在 mentions 里；本方法不做判断。
+  void showMentioned(String slug, String name, String by, String text) {
+    AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _hashId('$slug-mention'),
+        channelKey: 'dazi_events',
+        title: 'Dazi: $name',
+        body: '$by 提到你：$text',
+        notificationLayout: NotificationLayout.Default,
+        payload: {'type': 'mention', 'slug': slug},
+      ),
+    );
+  }
+
+  /// 任务指派给我。取消指派不通知——「这活不再归你」不值得打断人。
+  void showAssigned(String slug, String name, String by) {
+    AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _hashId('$slug-assigned'),
+        channelKey: 'dazi_events',
+        title: 'Dazi: $name',
+        body: '$by 把这个任务指派给你',
+        notificationLayout: NotificationLayout.Default,
+        payload: {'type': 'assigned', 'slug': slug},
       ),
     );
   }

@@ -31,6 +31,9 @@ class ApiPaths {
   static const batonHandoff = '/api/v1/projects/{slug}/baton/handoff';
   static const relay = '/api/v1/projects/{slug}/relay';
   static const inbox = '/api/v1/inbox';
+  static const assignee = '/api/v1/projects/{slug}/assignee';
+  static const comments = '/api/v1/projects/{slug}/comments';
+  static const assigned = '/api/v1/assigned';
   static const members = '/api/v1/members';
   static const me = '/api/v1/me';
 
@@ -46,6 +49,10 @@ class ApiPaths {
   static String batonHandoffPath(String slug) =>
       batonHandoff.replaceFirst('{slug}', Uri.encodeComponent(slug));
   static String relayPath(String slug) => relay.replaceFirst('{slug}', Uri.encodeComponent(slug));
+  static String assigneePath(String slug) =>
+      assignee.replaceFirst('{slug}', Uri.encodeComponent(slug));
+  static String commentsPath(String slug) =>
+      comments.replaceFirst('{slug}', Uri.encodeComponent(slug));
   static String resolveApprovalPath(String slug, String id) => resolveApproval
       .replaceFirst('{slug}', Uri.encodeComponent(slug))
       .replaceFirst('{id}', Uri.encodeComponent(id));

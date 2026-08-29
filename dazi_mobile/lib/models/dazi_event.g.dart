@@ -86,3 +86,44 @@ Map<String, dynamic> _$$ApprovalResolvedImplToJson(
       'approved': instance.approved,
       'type': instance.$type,
     };
+
+_$TaskAssignedImpl _$$TaskAssignedImplFromJson(Map<String, dynamic> json) =>
+    _$TaskAssignedImpl(
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      assignee: json['assignee'] as String?,
+      by: json['by'] as String,
+      $type: json['type'] as String?,
+    );
+
+Map<String, dynamic> _$$TaskAssignedImplToJson(_$TaskAssignedImpl instance) =>
+    <String, dynamic>{
+      'slug': instance.slug,
+      'name': instance.name,
+      'assignee': instance.assignee,
+      'by': instance.by,
+      'type': instance.$type,
+    };
+
+_$MentionedImpl _$$MentionedImplFromJson(Map<String, dynamic> json) =>
+    _$MentionedImpl(
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      mentions: (json['mentions'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const <String>[],
+      by: json['by'] as String,
+      text: json['text'] as String,
+      $type: json['type'] as String?,
+    );
+
+Map<String, dynamic> _$$MentionedImplToJson(_$MentionedImpl instance) =>
+    <String, dynamic>{
+      'slug': instance.slug,
+      'name': instance.name,
+      'mentions': instance.mentions,
+      'by': instance.by,
+      'text': instance.text,
+      'type': instance.$type,
+    };

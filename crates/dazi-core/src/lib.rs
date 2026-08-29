@@ -1,9 +1,11 @@
 //! dazi-core — Dazi 的纯逻辑核心，零 tauri 依赖。
 //! 桌面 app（src-tauri）与未来的 dazi-daemon 都依赖本 crate 复用同一套逻辑。
 
+pub mod assign;
 pub mod autopilot;
 pub mod backend;
 pub mod baton;
+pub mod comments;
 pub mod config;
 pub mod credentials;
 pub mod daemon_client;

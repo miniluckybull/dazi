@@ -1,4 +1,5 @@
 export 'approval.dart';
+export 'assign.dart';
 export 'baton.dart';
 export 'dazi_event.dart';
 export 'health.dart';

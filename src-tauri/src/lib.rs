@@ -366,6 +366,58 @@ fn release_baton(project_path: PathBuf, note: Option<String>, force: bool) -> Re
         .map_err(|e| e.to_string())
 }
 
+// ---- 指派与评论 ----
+// 同棒：桌面直读文件系统，与 daemon 共用 dazi_core，两侧看同一份文件。
+// 操作者同为 local_actor()。
+
+#[tauri::command]
+fn read_assignment(project_path: PathBuf) -> Option<dazi_core::assign::Assignment> {
+    dazi_core::assign::read_assignment(&project_path)
+}
+
+/// 指派。`assignee` 为 None 表示取消指派。
+#[tauri::command]
+fn set_assignment(
+    project_path: PathBuf,
+    assignee: Option<String>,
+) -> Result<Option<dazi_core::assign::Assignment>, String> {
+    dazi_core::assign::set_assignment(
+        &project_path,
+        assignee.as_deref(),
+        &local_actor(),
+        chrono::Utc::now(),
+    )
+}
+
+#[tauri::command]
+fn read_comments(project_path: PathBuf) -> Vec<dazi_core::comments::Comment> {
+    dazi_core::comments::read_comments(&project_path, None)
+}
+
+/// 发评论。@提及在此解析，与 daemon 走同一个 parse_mentions——
+/// 两侧各写一套匹配规则必然漂移，而漂移的后果是「我 @ 了他但他没收到」。
+#[tauri::command]
+fn add_comment(
+    project_path: PathBuf,
+    text: String,
+) -> Result<dazi_core::comments::Comment, String> {
+    // 只有在职成员可被提及：提及停用成员没有通知对象。
+    let candidates: Vec<(String, String)> = dazi_core::team::load()
+        .members
+        .into_iter()
+        .filter(|m| m.status == dazi_core::team::MemberStatus::Active)
+        .map(|m| (m.id, m.name))
+        .collect();
+    let mentions = dazi_core::comments::parse_mentions(&text, &candidates);
+    dazi_core::comments::append_comment(
+        &project_path,
+        &local_actor(),
+        &text,
+        mentions,
+        chrono::Utc::now(),
+    )
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -889,6 +941,10 @@ pub fn run() {
             claim_baton,
             handoff_baton,
             release_baton,
+            read_assignment,
+            set_assignment,
+            read_comments,
+            add_comment,
             pty::pty_open,
             pty::pty_launch,
             pty::pty_write,

@@ -43,6 +43,9 @@ extension MemberCapabilities on Member {
   /// 能否推进任务（认领/递交棒、产计划、开终端）。
   bool get canRun => isActive && role != 'viewer';
 
+  /// 能否改任务内容与安排（含指派）。服务端 Permission::Write 门槛同为 member。
+  bool get canWrite => isActive && role != 'viewer';
+
   /// 能否决策审批。
   bool get canApprove => isActive && role != 'viewer';
 
