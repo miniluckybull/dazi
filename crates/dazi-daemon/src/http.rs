@@ -49,7 +49,19 @@ pub(crate) fn find_project_path(slug: &str) -> Result<PathBuf, (StatusCode, Json
         .ok_or_else(|| err(StatusCode::NOT_FOUND, format!("找不到项目: {slug}")))
 }
 
-pub async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
+/// 公开存活探针。**只回最小信息**：此前这里返回工作区绝对路径、已配对设备数与
+/// claude 版本，未鉴权即可读取，等于向任何能连上端口的人泄露内部状态。
+/// 详细信息移到受保护的 /api/v1/health。
+pub async fn health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "ok": true,
+        "service": "dazi-daemon",
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
+}
+
+/// 详细健康信息（需鉴权）。含工作区路径、设备数与后端探活。
+pub async fn health_detail(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cfg = config::load().ok();
     let workspace = cfg
         .and_then(|c| c.workspace)
@@ -193,13 +205,21 @@ pub struct PairResp {
     pub device_token: String,
 }
 
+/// PIN 配对：绑定到 owner。PIN 只打印在本机终端，能拿到的人本就物理控制这台机器。
+/// 其他成员走 POST /api/v1/pair/invite。
 pub async fn pair(
     State(state): State<AppState>,
     Json(req): Json<PairReq>,
 ) -> ApiResult<PairResp> {
+    let owner_id = crate::team::load()
+        .members
+        .into_iter()
+        .find(|m| m.role == crate::team::Role::Owner)
+        .map(|m| m.id)
+        .ok_or_else(|| err(StatusCode::INTERNAL_SERVER_ERROR, "owner 未初始化"))?;
     let token = state
         .auth
-        .pair(&req.pin, &req.device_name)
+        .pair(&req.pin, &req.device_name, &owner_id)
         .map_err(|e| err(StatusCode::UNAUTHORIZED, e))?;
     Ok(Json(PairResp {
         device_token: token,

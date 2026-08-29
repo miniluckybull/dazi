@@ -175,8 +175,11 @@ pub async fn ws_terminal_handler(
 ) -> Result<Response, StatusCode> {
     // 1) token 先于一切校验，失败立即 401，绝不开 PTY。
     let token = q.token.clone().unwrap_or_default();
-    if !state.auth.verify(&token) {
-        return Err(StatusCode::UNAUTHORIZED);
+    let cur = crate::http_team::resolve_caller(&state, &token).ok_or(StatusCode::UNAUTHORIZED)?;
+    // PTY 是宿主机上的真 shell，比任何 HTTP 写操作都强。viewer 拿到终端等于
+    // 绕过全部权限矩阵，故这里要 run 权限（403 而非 401：身份有效但不够）。
+    if !cur.member.can(crate::team::Permission::Run) {
+        return Err(StatusCode::FORBIDDEN);
     }
     // 2) cwd 只来自 find_project_path 解析的工作区内项目，绝不接受客户端传路径。
     let cwd = find_project_path(&slug).map_err(|_| StatusCode::NOT_FOUND)?;

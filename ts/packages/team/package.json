@@ -1,0 +1,16 @@
+{
+  "name": "@dazi/team",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "团队身份：成员、角色、权限矩阵、成员绑定配对与设备吊销",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@dazi/workspace": "*"
+  }
+}

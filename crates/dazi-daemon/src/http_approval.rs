@@ -12,7 +12,9 @@ use dazi_core::{autopilot, project, prompt, schedule, usage};
 use serde::Deserialize;
 
 use crate::approval::Approval;
-use crate::http::{err, find_project_path, AppState, ApiResult};
+use crate::http::{err, find_project_path, ApiResult, AppState};
+use crate::http_team::{require, CurrentMember};
+use crate::team::Permission;
 
 fn model_of(path: &std::path::Path) -> Option<String> {
     project::read_meta(path)
@@ -31,7 +33,13 @@ fn usage_slug_of(path: &std::path::Path) -> String {
 /// 为某项目以 plan 模式产出执行计划，登记为待批并推 approval-requested。
 /// claude plan 模式只读、不执行，安全。供 HTTP handler 与 scheduler tick 复用。
 /// scheduler 在 blocking 上下文调用，故拆成同步函数（内部不 await）。
-pub fn request_plan(state: &AppState, slug: &str) -> Result<Approval, String> {
+///
+/// `requested_by` 为 None 表示调度器自动发起（无人类调用者）。
+pub fn request_plan(
+    state: &AppState,
+    slug: &str,
+    requested_by: Option<String>,
+) -> Result<Approval, String> {
     let path = find_project_path(slug).map_err(|(_, j)| j.0.error)?;
     let name = project::read_meta(&path)
         .map(|m| m.name)
@@ -45,7 +53,7 @@ pub fn request_plan(state: &AppState, slug: &str) -> Result<Approval, String> {
     let estimate = usage::estimate_run_cost(&usage_slug_of(&path));
     let approval = state
         .approvals
-        .create(slug, &name, &outcome.summary, estimate.clone());
+        .create(slug, &name, &outcome.summary, estimate.clone(), requested_by);
     state.events.emit(DaziEvent::ApprovalRequested {
         slug: slug.to_string(),
         name,
@@ -60,10 +68,14 @@ pub fn request_plan(state: &AppState, slug: &str) -> Result<Approval, String> {
 /// claude plan 模式只读、不执行，安全。
 pub async fn create_plan(
     State(state): State<AppState>,
+    axum::Extension(cur): axum::Extension<CurrentMember>,
     Path(slug): Path<String>,
 ) -> ApiResult<Approval> {
+    // 产计划要起 claude 进程（虽只读），故按 run 权限而非 write 把关。
+    require(&cur, Permission::Run)?;
+    let me = cur.member.id.clone();
     // claude 调用是阻塞且耗时的，放到 blocking 线程池。
-    let approval = tokio::task::spawn_blocking(move || request_plan(&state, &slug))
+    let approval = tokio::task::spawn_blocking(move || request_plan(&state, &slug, Some(me)))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, format!("计划任务失败: {e}")))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -71,7 +83,11 @@ pub async fn create_plan(
 }
 
 /// 列出全部待批审批。
-pub async fn list_approvals(State(state): State<AppState>) -> ApiResult<Vec<Approval>> {
+pub async fn list_approvals(
+    State(state): State<AppState>,
+    axum::Extension(cur): axum::Extension<CurrentMember>,
+) -> ApiResult<Vec<Approval>> {
+    require(&cur, Permission::Read)?;
     Ok(Json(state.approvals.list_pending()))
 }
 
@@ -83,12 +99,14 @@ pub struct ResolveReq {
 /// 决策一条审批。批准则真正执行（bypassPermissions），拒绝则仅记录。
 pub async fn resolve_approval(
     State(state): State<AppState>,
+    axum::Extension(cur): axum::Extension<CurrentMember>,
     Path((slug, id)): Path<(String, String)>,
     Json(req): Json<ResolveReq>,
 ) -> ApiResult<Approval> {
+    require(&cur, Permission::Approve)?;
     let approval = state
         .approvals
-        .resolve(&id, &slug, req.approved)
+        .resolve(&id, &slug, req.approved, &cur.member.id)
         .ok_or_else(|| err(StatusCode::CONFLICT, "审批不存在或已处理"))?;
 
     if !req.approved {

@@ -4,9 +4,11 @@ mod approval;
 mod auth;
 mod http;
 mod http_approval;
+mod http_team;
 mod http_write;
 mod pty;
 mod scheduler;
+mod team;
 mod ws;
 
 use axum::{
@@ -31,7 +33,18 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    let auth = Arc::new(Auth::new());
+    // 身份地基：首启创建唯一 owner，并把历史遗留设备补绑给它。
+    // 失败则直接退出——没有身份表就无法鉴权，带着空表继续跑等于全线放行。
+    let owner = match team::bootstrap_owner(&default_owner_name()) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("初始化团队身份失败，无法安全启动: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!("owner: {} ({})", owner.name, owner.id);
+
+    let auth = Arc::new(Auth::new(&owner.id));
     let state = AppState {
         auth: auth.clone(),
         events: ws::WsSink::new(),
@@ -49,6 +62,7 @@ async fn main() {
         .route("/icons/:path", get(http::icon))
         .route("/health", get(http::health))
         .route("/api/v1/pair", post(http::pair))
+        .route("/api/v1/pair/invite", post(http_team::pair_with_invite))
         .route("/api/v1/events", get(ws::ws_handler))
         .route(
             "/api/v1/projects/:slug/terminal",
@@ -92,6 +106,24 @@ async fn main() {
             "/api/v1/projects/:slug/approvals/:id",
             post(http_approval::resolve_approval),
         )
+        // 团队身份：成员、邀请码、设备吊销。
+        .route("/api/v1/me", get(http_team::me))
+        .route(
+            "/api/v1/members",
+            get(http_team::list_members).post(http_team::add_member),
+        )
+        .route(
+            "/api/v1/members/:id/invite",
+            post(http_team::create_invite),
+        )
+        .route(
+            "/api/v1/members/:id/suspend",
+            post(http_team::suspend_member),
+        )
+        .route("/api/v1/devices", get(http_team::list_devices))
+        .route("/api/v1/devices/:id", delete(http_team::revoke_device))
+        // 详细健康信息含工作区路径等内部状态，必须鉴权（公开 /health 只回最小信息）。
+        .route("/api/v1/health", get(http::health_detail))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let app = Router::new()
@@ -191,9 +223,12 @@ fn print_pair_qr(content: &str) {
 }
 
 /// Bearer token 鉴权中间件。
+///
+/// 解析出「是谁」并注入请求扩展，而不只是判断「通不通过」——后者会让审批、
+/// 运行等操作永远无法追溯到人。设备已吊销、成员不存在或已停用一律 401。
 async fn require_auth(
     State(state): State<AppState>,
-    req: Request<axum::body::Body>,
+    mut req: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let token = req
@@ -201,10 +236,17 @@ async fn require_auth(
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    match token {
-        Some(t) if state.auth.verify(&t) => Ok(next.run(req).await),
-        _ => Err(StatusCode::UNAUTHORIZED),
-    }
+    let cur = http_team::resolve_caller(&state, &token).ok_or(StatusCode::UNAUTHORIZED)?;
+    req.extensions_mut().insert(cur);
+    Ok(next.run(req).await)
+}
+
+/// owner 默认名：取系统用户名，拿不到就用占位名。仅首启使用，之后可改。
+fn default_owner_name() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "owner".to_string())
 }

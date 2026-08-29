@@ -53,9 +53,10 @@ pub async fn ws_handler(
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let token = q.token.unwrap_or_default();
-    if !state.auth.verify(&token) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
+    // 与 HTTP 同一份判定：设备吊销、成员停用都必须挡在升级之前。
+    let cur = crate::http_team::resolve_caller(&state, &token).ok_or(StatusCode::UNAUTHORIZED)?;
+    // 事件流目前是全量广播；订阅者身份先记下来，寻址在 S5 接力层落地。
+    tracing::debug!("事件流订阅: member={} device={}", cur.member.id, cur.device_id);
     let rx = state.events.subscribe();
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, rx)))
 }

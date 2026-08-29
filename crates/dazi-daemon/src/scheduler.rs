@@ -63,7 +63,8 @@ async fn tick(state: &AppState, in_flight: &Arc<Mutex<HashSet<PathBuf>>>) {
             let slug = d.slug.clone();
             // request_plan 内部阻塞调用 claude，放 blocking 线程池。
             tokio::task::spawn_blocking(move || {
-                let result = crate::http_approval::request_plan(&state, &slug);
+                // 调度器自动发起，无人类调用者，故发起人为 None。
+                let result = crate::http_approval::request_plan(&state, &slug, None);
                 match result {
                     Ok(_) => {
                         // 记一次触发并推进 next_run_at，避免下个 tick 重复生成计划。
