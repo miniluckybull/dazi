@@ -12,3 +12,5 @@ trash = "5"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["time"] }
 base64 = "0.22"
+# team.rs 的成员 id 与邀请码需要随机源。
+rand = "0.8"

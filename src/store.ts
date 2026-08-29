@@ -115,6 +115,40 @@ export interface ReferenceEntry {
   is_dir: boolean;
 }
 
+/** 团队成员。与 dazi_core::team::Member 对齐。 */
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: "viewer" | "member" | "admin" | "owner";
+  status: "active" | "suspended";
+  created_at?: string;
+}
+
+/** 接力棒。holder 在 kind=human 时是 member_id，agent 时是 agent 名。 */
+export interface Baton {
+  holder: string;
+  kind: "human" | "agent";
+  since: string;
+  expires_at: string;
+}
+
+/** expired 区分「从没人碰过」（baton=null）与「有人拿了但超时」——后者可直接接管。 */
+export interface BatonState {
+  baton: Baton | null;
+  expired: boolean;
+}
+
+/** relay.jsonl 的一条。by 是实际写入者，管理员强收时不等于 from。 */
+export interface RelayEntry {
+  at: string;
+  action: "claim" | "handoff" | "release" | "expire";
+  from?: string | null;
+  to?: string | null;
+  kind?: "human" | "agent" | null;
+  note?: string | null;
+  by: string;
+}
+
 interface AppState {
   config: AppConfig | null;
   projects: ProjectSummary[];
@@ -210,6 +244,14 @@ interface AppState {
   getDaemonConfig: () => Promise<DaemonConfig>;
   saveDaemonConfig: (c: DaemonConfig) => Promise<void>;
   daemonPing: (host: string, port: number) => Promise<unknown>;
+  /** 接力棒：桌面直读文件系统，与 daemon 共用同一份 baton.json */
+  teamMembers: TeamMember[];
+  refreshTeamMembers: () => Promise<void>;
+  readBaton: (projectPath: string) => Promise<BatonState>;
+  readRelayChain: (projectPath: string) => Promise<RelayEntry[]>;
+  claimBaton: (projectPath: string, note?: string) => Promise<Baton>;
+  handoffBaton: (projectPath: string, to: string, note?: string) => Promise<Baton>;
+  releaseBaton: (projectPath: string, note?: string, force?: boolean) => Promise<void>;
 }
 
 export interface DaemonConfig {
@@ -639,4 +681,29 @@ export const useApp = create<AppState>((set, get) => ({
   daemonPing: async (host, port) => {
     return invoke("daemon_ping", { host, port });
   },
+
+  teamMembers: [],
+
+  refreshTeamMembers: async () => {
+    try {
+      set({ teamMembers: await invoke<TeamMember[]>("list_team_members") });
+    } catch {
+      // team.yml 不存在是单机用户的正常状态，不当错误弹给用户。
+      set({ teamMembers: [] });
+    }
+  },
+
+  readBaton: (projectPath) => invoke<BatonState>("read_baton", { projectPath }),
+
+  readRelayChain: (projectPath) =>
+    invoke<RelayEntry[]>("read_relay_chain", { projectPath }),
+
+  claimBaton: (projectPath, note) =>
+    invoke<Baton>("claim_baton", { projectPath, note: note ?? null }),
+
+  handoffBaton: (projectPath, to, note) =>
+    invoke<Baton>("handoff_baton", { projectPath, to, note: note ?? null }),
+
+  releaseBaton: (projectPath, note, force = false) =>
+    invoke("release_baton", { projectPath, note: note ?? null, force }),
 }));

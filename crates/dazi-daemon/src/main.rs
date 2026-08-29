@@ -2,7 +2,6 @@
 //! 复用 dazi-core 的全部业务逻辑，监听局域网，供手机等瘦客户端访问。
 mod approval;
 mod auth;
-mod baton;
 mod http;
 mod http_approval;
 mod http_baton;
@@ -10,8 +9,12 @@ mod http_team;
 mod http_write;
 mod pty;
 mod scheduler;
-mod team;
 mod ws;
+
+/// baton 与 team 住在 dazi-core：桌面（src-tauri，直读文件系统）与本 daemon
+/// 必须共用同一份实现，否则两侧对同一份 baton.json 的判断会漂移。
+/// 这里做 crate 内别名，使既有 `crate::team::` 路径不必逐处改写。
+use dazi_core::{baton, team};
 
 use axum::{
     extract::State,

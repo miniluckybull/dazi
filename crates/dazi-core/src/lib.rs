@@ -3,6 +3,7 @@
 
 pub mod autopilot;
 pub mod backend;
+pub mod baton;
 pub mod config;
 pub mod credentials;
 pub mod daemon_client;
@@ -13,4 +14,5 @@ pub mod project;
 pub mod prompt;
 pub mod schedule;
 pub mod skills;
+pub mod team;
 pub mod usage;

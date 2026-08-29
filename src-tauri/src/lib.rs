@@ -299,6 +299,73 @@ async fn daemon_ping(host: String, port: u16) -> Result<serde_json::Value, Strin
     dazi_core::daemon_client::ping(&host, port).await
 }
 
+// ---- 接力棒 ----
+// 桌面直读文件系统，与 daemon 共用 dazi_core::baton，两侧看同一份 baton.json。
+// 桌面没有配对身份，操作者恒为本机 owner（team.yml 里 role=owner 那位）；
+// 单机用户 team.yml 可能还不存在，故 fallback 到一个稳定的本机标识，
+// 否则接力链上会出现空 holder，导致「谁在推进」不可信。
+
+/// 桌面端的操作者 id。owner 存在则用其 member id，否则用本机标识。
+fn local_actor() -> String {
+    dazi_core::team::load()
+        .members
+        .into_iter()
+        .find(|m| m.role == dazi_core::team::Role::Owner)
+        .map(|m| m.id)
+        .unwrap_or_else(|| "local-desktop".to_string())
+}
+
+/// member_id → 人名。接力链存 id，界面要显示名字。
+#[tauri::command]
+fn list_team_members() -> Vec<dazi_core::team::Member> {
+    dazi_core::team::load().members
+}
+
+#[tauri::command]
+fn read_baton(project_path: PathBuf) -> dazi_core::baton::BatonState {
+    dazi_core::baton::read_baton(&project_path, chrono::Utc::now())
+}
+
+#[tauri::command]
+fn read_relay_chain(project_path: PathBuf) -> Vec<dazi_core::baton::RelayEntry> {
+    dazi_core::baton::read_chain(&project_path, None)
+}
+
+#[tauri::command]
+fn claim_baton(project_path: PathBuf, note: Option<String>) -> Result<dazi_core::baton::Baton, String> {
+    dazi_core::baton::claim(
+        &project_path,
+        &local_actor(),
+        dazi_core::baton::HolderKind::Human,
+        note,
+        chrono::Utc::now(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn handoff_baton(
+    project_path: PathBuf,
+    to: String,
+    note: Option<String>,
+) -> Result<dazi_core::baton::Baton, String> {
+    dazi_core::baton::handoff(
+        &project_path,
+        &local_actor(),
+        &to,
+        dazi_core::baton::HolderKind::Human,
+        note,
+        chrono::Utc::now(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn release_baton(project_path: PathBuf, note: Option<String>, force: bool) -> Result<(), String> {
+    dazi_core::baton::release(&project_path, &local_actor(), force, note, chrono::Utc::now())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn read_project_journal(project_path: PathBuf) -> Result<String, String> {
     memory::read_project(&project_path, "journal.md")
@@ -816,6 +883,12 @@ pub fn run() {
             extract_skill,
             run_autopilot_now,
             get_terminal_mode,
+            list_team_members,
+            read_baton,
+            read_relay_chain,
+            claim_baton,
+            handoff_baton,
+            release_baton,
             pty::pty_open,
             pty::pty_launch,
             pty::pty_write,

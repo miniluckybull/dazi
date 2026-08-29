@@ -382,11 +382,15 @@ pub fn read_chain(project: &Path, limit: Option<usize>) -> Vec<RelayEntry> {
 mod tests {
     use super::*;
 
+    /// 每个用例独立目录。计数器不可省：macOS 的时钟精度粗于纳秒，
+    /// 仅靠 pid+时间戳在并行测试下会撞名，撞上的两个用例会互删对方的目录。
     fn tmp() -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
         let p = std::env::temp_dir().join(format!(
             "dazi-baton-{}-{}",
             std::process::id(),
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            SEQ.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&p).unwrap();
         p
