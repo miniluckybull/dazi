@@ -1,0 +1,16 @@
+{
+  "name": "@dazi/relay",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "接力棒：认领/递交/放下、relay.jsonl 接力链、交接包注入",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@dazi/workspace": "*"
+  }
+}

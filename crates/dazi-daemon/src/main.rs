@@ -2,8 +2,10 @@
 //! 复用 dazi-core 的全部业务逻辑，监听局域网，供手机等瘦客户端访问。
 mod approval;
 mod auth;
+mod baton;
 mod http;
 mod http_approval;
+mod http_baton;
 mod http_team;
 mod http_write;
 mod pty;
@@ -102,6 +104,19 @@ async fn main() {
             post(http_approval::create_plan),
         )
         .route("/api/v1/approvals", get(http_approval::list_approvals))
+        // 接力棒：认领/递交/放下 + 接力链 + 跨项目「待我处理」。
+        .route(
+            "/api/v1/projects/:slug/baton",
+            get(http_baton::get_baton)
+                .post(http_baton::claim_baton)
+                .delete(http_baton::release_baton),
+        )
+        .route(
+            "/api/v1/projects/:slug/baton/handoff",
+            post(http_baton::handoff_baton),
+        )
+        .route("/api/v1/projects/:slug/relay", get(http_baton::get_relay_chain))
+        .route("/api/v1/inbox", get(http_baton::get_inbox))
         .route(
             "/api/v1/projects/:slug/approvals/:id",
             post(http_approval::resolve_approval),

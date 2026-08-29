@@ -1,0 +1,25 @@
+export {
+  type Baton,
+  BATON_TTL_MS,
+  BatonHeldError,
+  type BatonState,
+  type ClaimOptions,
+  claimBaton,
+  type HandoffOptions,
+  handoffBaton,
+  type HolderKind,
+  NotHolderError,
+  readBaton,
+  readRelayChain,
+  type RelayAction,
+  type RelayEntry,
+  type ReleaseOptions,
+  releaseBaton,
+} from './baton.ts'
+export {
+  buildRelaySection,
+  draftHandoffNote,
+  type NameResolver,
+  RELAY_TAIL_ENTRIES,
+  withRelaySection,
+} from './handoff.ts'
