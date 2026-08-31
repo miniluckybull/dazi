@@ -1,0 +1,13 @@
+{
+  "name": "@dazi/llm",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "模型端点凭据读取与 dsh-llm 配置装配",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  }
+}
