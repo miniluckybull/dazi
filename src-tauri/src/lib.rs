@@ -1,7 +1,7 @@
 mod config;
 mod pty;
 
-use dazi_core::{autopilot, memory, project, prompt, schedule};
+use dazi_core::{autopilot, baton, memory, project, prompt, schedule};
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -574,6 +574,25 @@ fn read_terminal_kind(workspace: &Option<PathBuf>) -> String {
     }
 }
 
+/// 把接力历史并入交接/计划 prompt，让桌面交互式会话的 Claude 也能看到
+/// 棒经过谁的手——与人审批后的执行路径对齐（daemon 端
+/// `http_approval::with_relay` 已在做同样的事）。
+///
+/// 接力段为空（首接棒、或从未接棒）由 `with_relay_section` 直接回退原 prompt，
+/// 不留空段。链只在最后一个 `## 任务` 之前插入，任务指令保持在末尾——模型对
+/// 结尾指令最敏感。
+fn harness_prompt_with_relay(project_path: &Path, base: String) -> String {
+    let members = dazi_core::team::load().members;
+    let resolve = move |id: &str| -> Option<String> {
+        members
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.name.clone())
+    };
+    let section = baton::build_relay_section(project_path, &resolve, baton::RELAY_TAIL_ENTRIES);
+    baton::with_relay_section(&base, section)
+}
+
 /// 终端模式：默认内嵌（embedded）；.dazi/config.yml 写 `terminal: external`
 /// 则交接/继续走旧的外部 Terminal.app/iTerm 路径（一键回退）。
 #[tauri::command]
@@ -625,7 +644,8 @@ fn hand_off_to_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<P
     }
     let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
-    let prompt = prompt::build_handoff_prompt(&project_path);
+    let base = prompt::build_handoff_prompt(&project_path);
+    let prompt = harness_prompt_with_relay(&project_path, base);
     let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
     let cmd = escape_applescript(&backend.build_interactive_cmd(&prompt));
     run_in_terminal(&kind, &project_path, Some(&cmd))?;
@@ -640,7 +660,8 @@ fn plan_with_claude(_app: tauri::AppHandle, project_path: PathBuf) -> Result<Pro
     }
     let cfg = config::load()?;
     let kind = read_terminal_kind(&cfg.workspace);
-    let prompt = prompt::build_handoff_plan_prompt(&project_path);
+    let base = prompt::build_handoff_plan_prompt(&project_path);
+    let prompt = harness_prompt_with_relay(&project_path, base);
     let backend = dazi_core::backend::global().current(cfg.backend.as_deref());
     let cmd = escape_applescript(&backend.build_interactive_plan_cmd(&prompt));
     run_in_terminal(&kind, &project_path, Some(&cmd))?;

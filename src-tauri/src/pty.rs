@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use dazi_core::{autopilot, project, prompt};
+use dazi_core::{autopilot, baton, project, prompt};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
@@ -106,6 +106,24 @@ fn append_scrollback(scrollback: &Mutex<Vec<u8>>, data: &[u8]) {
     }
 }
 
+/// 把接力历史并入交接/计划 prompt，让内嵌 pty 启动的 Claude 也能看到棒
+/// 经过谁的手——与外部 Terminal 路径的 `lib.rs::harness_prompt_with_relay`
+/// 和 daemon 审批执行路径的 `http_approval::with_relay` 对齐。
+///
+/// 接力段为空（首接棒、或从未接棒）由 `with_relay_section` 直接回退原 prompt，
+/// 不留空段。链只在最后一个 `## 任务` 之前插入，任务指令保持在末尾。
+fn harness_prompt_with_relay(project_path: &std::path::Path, base: String) -> String {
+    let members = dazi_core::team::load().members;
+    let resolve = move |id: &str| -> Option<String> {
+        members
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.name.clone())
+    };
+    let section = baton::build_relay_section(project_path, &resolve, baton::RELAY_TAIL_ENTRIES);
+    baton::with_relay_section(&base, section)
+}
+
 /// 构造 pty 内运行的命令。Handoff/Plan/Continue 都在后端 CLI 退出后 exec 回登录 shell，
 /// 保证会话不因 CLI 结束而关闭。
 /// agent_mode：仅 Handoff 生效。true 时走后端的 headless 模式（默认 claude：
@@ -126,7 +144,8 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 cmd.arg("-l");
             }
             PtyLaunch::Handoff => {
-                let p = prompt::build_handoff_prompt(cwd);
+                let base = prompt::build_handoff_prompt(cwd);
+                let p = harness_prompt_with_relay(cwd, base);
                 cmd.arg("-lc");
                 let action = if agent_mode {
                     // agent 模式：调后端 build_headless_cmd 但丢弃 cwd 走 shell。
@@ -154,7 +173,8 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 // 「先出计划」：交互式 plan 模式，claude CLI 只读产计划，用户确认后放行。
                 // agent_mode 不生效——plan 本身即只读，无需 bypassPermissions。
                 cmd.arg("-lc");
-                let p = prompt::build_handoff_plan_prompt(cwd);
+                let base = prompt::build_handoff_plan_prompt(cwd);
+                let p = harness_prompt_with_relay(cwd, base);
                 cmd.arg(format!(
                     "{}; exec {shell} -l",
                     backend.build_interactive_plan_cmd(&p)
@@ -178,7 +198,8 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 cmd.arg("chcp 65001 >nul");
             }
             PtyLaunch::Handoff => {
-                let p = prompt::build_handoff_prompt(cwd);
+                let base = prompt::build_handoff_prompt(cwd);
+                let p = harness_prompt_with_relay(cwd, base);
                 // cmd.exe 双引号内把 \" 转义成 \\\"，换行替换为空格避免多行参数解析失败。
                 let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
                 cmd.arg("/K");
@@ -198,7 +219,8 @@ fn build_command(cwd: &PathBuf, launch: PtyLaunch, agent_mode: bool) -> Result<C
                 }
             }
             PtyLaunch::Plan => {
-                let p = prompt::build_handoff_plan_prompt(cwd);
+                let base = prompt::build_handoff_plan_prompt(cwd);
+                let p = harness_prompt_with_relay(cwd, base);
                 // 与 Handoff 相同的转义策略；仅 claude 后端透传 --permission-mode，
                 // 其它后端不支持时省略 flag，靠 prompt 约束只产计划。
                 let escaped = p.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
@@ -370,7 +392,8 @@ pub fn pty_launch(
     let agent = agent_mode.unwrap_or(false);
     let line = match launch {
         PtyLaunch::Handoff => {
-            let p = prompt::build_handoff_prompt(&cwd);
+            let base = prompt::build_handoff_prompt(&cwd);
+            let p = harness_prompt_with_relay(&cwd, base);
             if agent {
                 // 走 headless 命令（backend 内部处理 --permission-mode 是否透传）
                 let spec = claude.build_headless_cmd(&p, "bypassPermissions", &cwd);
@@ -393,7 +416,8 @@ pub fn pty_launch(
         }
         PtyLaunch::Plan => {
             // 「先出计划」：plan 模式只读产计划，不走 headless/bypassPermissions。
-            let p = prompt::build_handoff_plan_prompt(&cwd);
+            let base = prompt::build_handoff_plan_prompt(&cwd);
+            let p = harness_prompt_with_relay(&cwd, base);
             format!("{}\r", claude.build_interactive_plan_cmd(&p))
         }
         PtyLaunch::Continue => format!("{}\r", claude.build_continue_cmd()),
